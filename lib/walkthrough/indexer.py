@@ -25,6 +25,9 @@ class Caps:
     impact_paths: int = 10
 
 
+EXPANDING_KINDS = {"function", "method", "constructor", "other", "toplevel"}
+
+
 class RootLost(Exception):
     pass
 
@@ -428,8 +431,9 @@ class Indexer:
             node_id = queue.popleft()
             node = self.nodes[node_id]
             depth, up, direction = node["depth"], node["up"], node["direction"]
+            descends = up == 0 and not node["test"] and node["kind"] in EXPANDING_KINDS
             for target in self.compute_links(node_id) + self.compute_implementations(node_id):
-                if up == 0 and depth + 1 <= self.caps.max_down and self.add_node(target, depth + 1, up, "down"):
+                if descends and depth + 1 <= self.caps.max_down and self.add_node(target, depth + 1, up, "down"):
                     queue.append(target.id)
             if direction in ("seed", "up") or depth <= 1:
                 for caller in self.compute_callers(node_id):

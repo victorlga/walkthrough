@@ -1,6 +1,8 @@
 import json
 
 RATE = 2
+MAX = 10
+LIMITS = {"max": MAX}
 
 
 def base_price(amount):

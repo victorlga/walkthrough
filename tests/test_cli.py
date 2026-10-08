@@ -49,7 +49,7 @@ class CliTest(unittest.TestCase):
     def test_context_shows_numbered_source_with_diff_marks_and_callers(self):
         code, out, _ = run("context", self.run_dir, "app/pricing.py#base_price")
         self.assertEqual(code, 0)
-        self.assertIn("  12 +     note", out)
+        self.assertIn("  14 +     note", out)
         self.assertIn("tests/test_pricing.py#test_base_price (test)", out)
 
     def test_doctor_names_the_languages_in_the_diff(self):

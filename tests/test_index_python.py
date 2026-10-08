@@ -25,7 +25,7 @@ class PythonIndexTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_changed_functions_are_found_in_file_order(self):
-        self.assertEqual(self.index["changed"], [P + "discount", P + "base_price"])
+        self.assertEqual(self.index["changed"], [P + "discount", P + "base_price", "tests/test_pricing.py#test_base_price"])
         self.assertEqual(self.nodes[P + "discount"]["change"]["status"], "added")
         self.assertEqual(self.nodes[P + "base_price"]["change"]["status"], "modified")
 
@@ -59,6 +59,14 @@ class PythonIndexTest(unittest.TestCase):
         self.assertNotIn("app/api.py#audit", self.nodes)
         frontier = [l for l in self.nodes["app/api.py#handler"]["links"] if "to" not in l]
         self.assertEqual([(l["path"], l["targetLine"]) for l in frontier], [("app/api.py", 4)])
+
+    def test_a_changed_test_does_not_pull_in_its_helpers(self):
+        self.assertIn("tests/test_pricing.py#test_base_price", self.index["changed"])
+        self.assertNotIn("tests/factories.py#make_amount", self.nodes)
+
+    def test_a_constant_does_not_pull_in_what_it_references(self):
+        self.assertIn(P + "LIMITS", self.nodes)
+        self.assertNotIn(P + "MAX", self.nodes)
 
     def test_markdown_change_becomes_a_hunk(self):
         hunk = next(h for h in self.index["hunks"] if h["path"] == "README.md")

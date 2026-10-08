@@ -1,10 +1,12 @@
 import json
 
 RATE = 2
+MAX = 10
+LIMITS = {"max": MAX}
 
 
 def discount(amount):
-    return amount // 10
+    return min(amount // 10, LIMITS["max"])
 
 
 def base_price(amount):
