@@ -75,6 +75,7 @@ class LspServer:
         self.condition = threading.Condition()
         self.stderr_lines: deque = deque(maxlen=40)
         self.process: Optional[subprocess.Popen] = None
+        self.threads: List[threading.Thread] = []
 
     def start(self) -> None:
         try:
@@ -83,8 +84,10 @@ class LspServer:
         except FileNotFoundError as error:
             raise LspError(f"{self.command[0]} is not installed") from error
         self.alive = True
-        threading.Thread(target=self.read_loop, daemon=True).start()
-        threading.Thread(target=self.drain_stderr, daemon=True).start()
+        self.threads = [threading.Thread(target=self.read_loop, daemon=True),
+                        threading.Thread(target=self.drain_stderr, daemon=True)]
+        for thread in self.threads:
+            thread.start()
         root_uri = self.root.as_uri()
         result = self.request("initialize", {
             "processId": os.getpid(), "rootUri": root_uri, "rootPath": str(self.root),
@@ -226,3 +229,12 @@ class LspServer:
             self.process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             self.process.kill()
+            self.process.wait()
+        for thread in self.threads:
+            thread.join(timeout=2)
+        for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
+            if stream is not None and not stream.closed:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
