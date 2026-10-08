@@ -9,9 +9,11 @@ import sys
 from pathlib import Path
 from typing import List
 
+from walkthrough import explanations as explanations_store
 from walkthrough import gitops
 from walkthrough.config import load_config
 from walkthrough.indexer import Caps, build_index
+from walkthrough.validate import prune, validate
 
 GLOSSARY_NAMES = ("CONTEXT.md", "GLOSSARY.md")
 
@@ -225,6 +227,35 @@ def cmd_cleanup(args) -> int:
     return 0
 
 
+def cmd_merge(args) -> int:
+    run_dir = Path(args.run_dir)
+    data = explanations_store.load(run_dir)
+    for fragment_path in args.fragments:
+        data = explanations_store.merge(data, json.loads(Path(fragment_path).read_text()))
+    explanations_store.save(run_dir, data)
+    print(f"{len(data['nodes'])} explanations in {run_dir / 'explanations.json'}")
+    return 0
+
+
+def cmd_validate(args) -> int:
+    run_dir = Path(args.run_dir)
+    index, _ = load_run(run_dir)
+    plan = json.loads((run_dir / "plan.json").read_text())
+    data = explanations_store.load(run_dir)
+    problems = validate(index, plan, data, args.max_skeleton)
+    if args.prune and problems:
+        before = len(data["pruned"])
+        problems = prune(data, problems)
+        explanations_store.save(run_dir, data)
+        for entry in data["pruned"][before:]:
+            print(f"pruned {entry['id']}: {entry['reason']}")
+        problems = validate(index, plan, data, args.max_skeleton)
+    for problem in problems:
+        print(problem)
+    print(f"{len(problems)} problems")
+    return 1 if problems else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="walkthrough")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -259,6 +290,17 @@ def build_parser() -> argparse.ArgumentParser:
     cleanup = sub.add_parser("cleanup", help="remove the temporary worktree")
     cleanup.add_argument("run_dir")
     cleanup.set_defaults(func=cmd_cleanup)
+
+    merge_cmd = sub.add_parser("merge", help="merge explanation fragments")
+    merge_cmd.add_argument("run_dir")
+    merge_cmd.add_argument("fragments", nargs="+")
+    merge_cmd.set_defaults(func=cmd_merge)
+
+    validate_cmd = sub.add_parser("validate", help="check plan and explanations against the index")
+    validate_cmd.add_argument("run_dir")
+    validate_cmd.add_argument("--max-skeleton", type=int, default=12)
+    validate_cmd.add_argument("--prune", action="store_true")
+    validate_cmd.set_defaults(func=cmd_validate)
     return parser
 
 
