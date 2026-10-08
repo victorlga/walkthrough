@@ -50,6 +50,7 @@ main { padding-inline: 16px; padding-block: 1.25rem 4rem; }
 .item .name { font-family: var(--font-code); font-weight: 600; overflow-wrap: anywhere; }
 .item .path { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
 .item .summary { display: block; color: var(--muted); }
+.item .summary code { font: .88em var(--font-code); background: var(--accent-soft); padding: 0 .2rem; border-radius: 2px; }
 .entry { font-family: var(--font-code); font-size: .85rem; padding: .4rem .25rem; border-top: 1px solid var(--rule); overflow-wrap: anywhere; }
 .entry .path, .entry .reach { color: var(--muted); }
 details.file, details.more { border-top: 1px solid var(--rule); }
@@ -249,7 +250,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     return `<button type="button" class="item${seen ? " seen" : ""}" data-go="${escapeHtml(id)}">`
       + `<span class="mark" aria-hidden="true">${seen ? "✓" : "○"}</span>`
       + `<span><span class="name">${escapeHtml(name)}</span> <span class="path" title="${escapeHtml(path)}">${escapeHtml(label)}</span>`
-      + `<span class="summary">${escapeHtml(summary)}</span></span></button>`;
+      + `<span class="summary">${formatInline(escapeHtml(summary))}</span></span></button>`;
   }
 
   function refLink(id) {
@@ -260,8 +261,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const node = nodes[entry.id];
     const shown = entry.reached.slice(0, 3).map(refLink).join(", ");
     const rest = entry.reached.length > 3 ? ` +${entry.reached.length - 3}` : "";
-    return `<div class="entry">${refLink(entry.id)} <span class="path" title="${escapeHtml(node.path)}">${escapeHtml(splitPath(node.path).file)}</span>`
-      + ` <span class="reach">→ ${shown}${rest}</span></div>`;
+    const where = node.kind === "toplevel" ? "" : ` <span class="path" title="${escapeHtml(node.path)}">${escapeHtml(splitPath(node.path).file)}</span>`;
+    return `<div class="entry">${refLink(entry.id)}${where} <span class="reach">→ ${shown}${rest}</span></div>`;
   }
 
   function fileGroup(group) {
