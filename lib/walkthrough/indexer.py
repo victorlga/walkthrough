@@ -303,15 +303,14 @@ class Indexer:
         targets: List[Candidate] = []
         if self.key(rel) is None:
             return targets
-        for token in linkable(self.file_tokens(rel)):
-            if not (candidate.start - 1 <= token.line <= candidate.end - 1):
-                continue
-            if token.line == candidate.sel_line and token.col == candidate.sel_char:
-                continue
-            try:
-                locations = self.call(rel, lambda server, path, t=token: server.definition(path, t.line, t.col))
-            except RootLost:
-                return targets
+        tokens = [t for t in linkable(self.file_tokens(rel))
+                  if candidate.start - 1 <= t.line <= candidate.end - 1
+                  and not (t.line == candidate.sel_line and t.col == candidate.sel_char)]
+        try:
+            answers = self.call(rel, lambda server, path: server.definitions(path, [(t.line, t.col) for t in tokens]))
+        except RootLost:
+            return targets
+        for token, locations in zip(tokens, answers):
             if not locations:
                 continue
             location = locations[0]
@@ -380,6 +379,8 @@ class Indexer:
         if key is None or not name:
             return
         language = self.config.languages[key[0]]
+        if not language.open_mentions:
+            return
         scope = key[1].relative_to(self.root).as_posix() or "."
         found = gitops.run_git(self.root, "grep", "-l", "-w", "-F", "--untracked", "-e", name, "--", scope, check=False)
         for path in found.splitlines()[:200]:

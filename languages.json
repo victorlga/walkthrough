@@ -36,6 +36,7 @@
       "rootMarkers": ["pyproject.toml", "setup.cfg", "setup.py", "requirements.txt"],
       "command": ["basedpyright-langserver", "--stdio"],
       "install": "npm install -g basedpyright",
+      "openMentions": true,
       "identifierPattern": "[A-Za-z_][A-Za-z0-9_]*"
     }
   }

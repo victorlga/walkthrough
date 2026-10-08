@@ -44,6 +44,13 @@ class LspTest(unittest.TestCase):
         self.assertEqual(uri_to_path(locations[0].uri), self.core)
         self.assertEqual(locations[0].line0, 0)
 
+    def test_batched_definitions_match_single_requests(self):
+        positions = [(4, 11), (4, 4), (0, 5)]
+        batch = self.server.definitions(self.other, positions)
+        single = [self.server.definition(self.other, line, char) for line, char in positions]
+        self.assertEqual(batch, single)
+        self.assertEqual(uri_to_path(batch[0][0].uri), self.core)
+
     def test_incoming_calls_find_callers_in_both_files(self):
         items = self.server.prepare_call_hierarchy(self.core, 0, 4)
         callers = {call["from"]["name"] for call in self.server.incoming_calls(items[0])}

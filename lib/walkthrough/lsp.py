@@ -177,6 +177,29 @@ class LspServer:
             raise LspError(f"{method} failed: {response['error'].get('message')}")
         return response.get("result")
 
+    def request_many(self, method: str, params_list: list, chunk: int = 200) -> list:
+        results = []
+        for offset in range(0, len(params_list), chunk):
+            part = params_list[offset:offset + chunk]
+            with self.condition:
+                first = self.next_id + 1
+                self.next_id += len(part)
+            for number, params in enumerate(part):
+                self.send({"jsonrpc": "2.0", "id": first + number, "method": method, "params": params})
+            deadline = time.time() + self.timeout
+            for request_id in range(first, first + len(part)):
+                with self.condition:
+                    while request_id not in self.responses:
+                        if not self.alive:
+                            raise LspError(f"{self.command[0]} exited during {method}: {self.stderr_tail()}")
+                        remaining = deadline - time.time()
+                        if remaining <= 0:
+                            raise LspError(f"{method} batch timed out after {self.timeout:.0f}s")
+                        self.condition.wait(remaining)
+                    response = self.responses.pop(request_id)
+                results.append(None if "error" in response else response.get("result"))
+        return results
+
     def notify(self, method: str, params) -> None:
         self.send({"jsonrpc": "2.0", "method": method, "params": params})
 
@@ -203,6 +226,10 @@ class LspServer:
 
     def definition(self, path: Path, line0: int, char: int) -> List[Location]:
         return normalize_locations(self.request("textDocument/definition", self.position(path, line0, char)))
+
+    def definitions(self, path: Path, positions: list) -> List[List[Location]]:
+        params = [self.position(path, line0, char) for line0, char in positions]
+        return [normalize_locations(result) for result in self.request_many("textDocument/definition", params)]
 
     def implementation(self, path: Path, line0: int, char: int) -> List[Location]:
         if not self.supports("implementationProvider"):
