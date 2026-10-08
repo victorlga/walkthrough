@@ -428,7 +428,7 @@ class Indexer:
             node = self.nodes[node_id]
             depth, up, direction = node["depth"], node["up"], node["direction"]
             for target in self.compute_links(node_id) + self.compute_implementations(node_id):
-                if depth + 1 <= self.caps.max_down and self.add_node(target, depth + 1, up, "down"):
+                if up == 0 and depth + 1 <= self.caps.max_down and self.add_node(target, depth + 1, up, "down"):
                     queue.append(target.id)
             if direction in ("seed", "up") or depth <= 1:
                 for caller in self.compute_callers(node_id):

@@ -24,6 +24,11 @@ def repo_root(path: Path) -> Path:
     return Path(run_git(path, "rev-parse", "--show-toplevel").strip()).resolve()
 
 
+def repo_name(root: Path) -> str:
+    common = run_git(root, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    return Path(common).resolve().parent.name
+
+
 def default_base(root: Path) -> str:
     ref = run_git(root, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD", check=False).strip()
     if not ref:

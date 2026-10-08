@@ -48,6 +48,12 @@ class GitopsTest(unittest.TestCase):
         self.assertIn("new.py", gitops.untracked_files(target.root))
         self.assertIn("new.py", gitops.repo_files(target.root))
 
+    def test_a_linked_worktree_is_named_after_its_main_repo(self):
+        linked = self.run_dir.parent / "some-worktree-name"
+        git(self.repo, "worktree", "add", str(linked), "other")
+        self.assertEqual(gitops.repo_name(linked), "repo")
+        self.assertEqual(gitops.repo_name(self.repo), "repo")
+
     def test_other_branch_gets_a_temporary_worktree_that_cleanup_removes(self):
         target = gitops.resolve_target(self.repo, "other", None, self.run_dir)
         self.assertEqual(target.worktree, (self.run_dir / "worktree").resolve())

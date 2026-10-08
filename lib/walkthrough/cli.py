@@ -82,7 +82,7 @@ def cmd_index(args) -> int:
     config = load_config()
     try:
         repo = gitops.repo_root(Path(args.repo or "."))
-        run_dir = Path(args.run_dir) if args.run_dir else cache_root() / repo.name / target_slug(repo, args.target)
+        run_dir = Path(args.run_dir) if args.run_dir else cache_root() / gitops.repo_name(repo) / target_slug(repo, args.target)
         run_dir.mkdir(parents=True, exist_ok=True)
         target = gitops.resolve_target(repo, args.target, args.base, run_dir)
     except gitops.GitError as error:
@@ -101,7 +101,7 @@ def cmd_index(args) -> int:
                   f"Install with: {language.install}", file=sys.stderr)
         print("Re-run with --skip-language <name> to index those files without links.", file=sys.stderr)
         return 2
-    meta = {"repo": repo.name, "repoPath": str(repo), "label": target.label, "title": target.title,
+    meta = {"repo": gitops.repo_name(repo), "repoPath": str(repo), "label": target.label, "title": target.title,
             "pr": target.pr, "slug": target.slug, "root": str(target.root),
             "worktree": str(target.worktree) if target.worktree else None}
     caps = Caps(max_nodes=args.max_nodes, max_down=args.max_down, max_up=args.max_up)

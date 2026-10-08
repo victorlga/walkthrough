@@ -55,6 +55,11 @@ class PythonIndexTest(unittest.TestCase):
         self.assertEqual(self.index["impact"][P + "base_price"]["paths"][0],
                          [P + "base_price", P + "describe", "app/api.py#handler"])
 
+    def test_climbing_to_a_caller_does_not_pull_in_what_it_calls(self):
+        self.assertNotIn("app/api.py#audit", self.nodes)
+        frontier = [l for l in self.nodes["app/api.py#handler"]["links"] if "to" not in l]
+        self.assertEqual([(l["path"], l["targetLine"]) for l in frontier], [("app/api.py", 4)])
+
     def test_markdown_change_becomes_a_hunk(self):
         hunk = next(h for h in self.index["hunks"] if h["path"] == "README.md")
         self.assertIn({"n": 3, "kind": "add", "text": "Prices now include a discount."}, hunk["lines"])
