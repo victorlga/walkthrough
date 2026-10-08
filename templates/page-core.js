@@ -73,9 +73,23 @@ function buildNameIndex(nodes) {
   return index;
 }
 
-function resolveRef(target, nameIndex) {
+function resolveRef(target, nameIndex, prefer) {
   const ids = nameIndex.get(target);
-  return ids && ids.size === 1 ? [...ids][0] : null;
+  if (!ids) return null;
+  if (ids.size === 1) return [...ids][0];
+  for (const preferred of prefer || []) {
+    const narrowed = [...ids].filter((id) => preferred.has(id));
+    if (narrowed.length === 1) return narrowed[0];
+  }
+  return null;
+}
+
+function neighborsOf(node) {
+  const ids = new Set();
+  (node.links || []).forEach((link) => { if (link.to) ids.add(link.to); });
+  (node.callers || []).forEach((caller) => ids.add(caller.from));
+  (node.implementations || []).forEach((id) => ids.add(id));
+  return ids;
 }
 
 function escapeHtml(value) {
@@ -98,7 +112,7 @@ function renderInline(text, ctx) {
       if (!lineInRange(segment, ctx)) return escapeHtml(label);
       return `<button class="chip" data-lines="${segment.from}-${segment.to}">${label}</button>`;
     }
-    const id = resolveRef(segment.target, ctx.nameIndex);
+    const id = resolveRef(segment.target, ctx.nameIndex, ctx.prefer);
     if (!id) return `<code>${escapeHtml(segment.target)}</code>`;
     return `<a class="ref" href="#" data-ref="${escapeHtml(id)}">${escapeHtml(ctx.nodes[id].name)}</a>`;
   }).join("");
@@ -307,7 +321,7 @@ function askTools(data) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STRINGS, t, parseMarkers, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
-    codeRows, lineSpans, lineSegments, pushEntry, popTo, popOne, progress, numberedSource, storageKey,
+    codeRows, lineSpans, lineSegments, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
     REQUIRED_SECTIONS, contextBlock, explainPrompt, askTurns, askTools,
   };
 }

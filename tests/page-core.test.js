@@ -106,3 +106,10 @@ test("ask tools read and find functions from the index only", () => {
   assert.deepStrictEqual(tools.callers_of.execute({ id: "a.py#calc" }), [{ id: "a.py#handler", lines: [21], test: false }]);
   assert.throws(() => tools.read_function.execute({ id: "nope" }), /not in the index/);
 });
+
+test("an ambiguous reference resolves to the preferred neighbor", () => {
+  const prefer = [new Set(["b.py#handler"])];
+  const html = core.renderMarkdown("Usa [[handler]].", { ...ctx, prefer });
+  assert.ok(html.includes('data-ref="b.py#handler"'));
+  assert.ok(core.renderMarkdown("Usa [[handler]].", ctx).includes("<code>handler</code>"));
+});

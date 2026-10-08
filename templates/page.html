@@ -126,6 +126,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   const lang = data.lang || "en";
   const tr = (key) => t(lang, key);
   const nameIndex = buildNameIndex(nodes);
+  const changedSet = new Set(index.changed || []);
   const hunks = Object.fromEntries((index.hunks || []).map((hunk) => [hunk.id, hunk]));
   const prefix = storageKey(index.meta);
   const store = {
@@ -234,7 +235,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   }
 
   function renderOverview() {
-    const ctx = { nameIndex, nodes, lineRange: null };
+    const ctx = { nameIndex, nodes, lineRange: null, prefer: [changedSet] };
     const counts = progress(data, visited);
     const parts = (plan.parts || []).map((part) => `<h3 class="part">${escapeHtml(part.title)}</h3>${part.roteiro.map(item).join("")}`).join("");
     const chains = [];
@@ -316,7 +317,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 
   function renderNode(entry) {
     const node = nodes[entry.id];
-    const ctx = { nameIndex, nodes, lineRange: node.lines };
+    const ctx = { nameIndex, nodes, lineRange: node.lines, prefer: [neighborsOf(node), changedSet] };
     const from = entry.fromId && nodes[entry.fromId]
       ? `<div>${tr("cameFrom")} <a class="ref" href="#" data-back="1">${escapeHtml(nodes[entry.fromId].name)}</a>${entry.fromLine ? `, ${tr("line")} ${entry.fromLine}` : ""}</div>` : "";
     view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}</article>`
@@ -477,7 +478,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       + `<div class="row"><button type="button" class="secondary" id="ask-button">${app.tr("send")}</button></div>`;
     const controls = { explain: document.getElementById("explain-button"), stop: document.getElementById("stop-button"),
       status: document.getElementById("ai-status"), send: document.getElementById("ask-button") };
-    const ctx = { nameIndex: app.nameIndex, nodes: app.nodes, lineRange: app.nodes[id].lines };
+    const ctx = { nameIndex: app.nameIndex, nodes: app.nodes, lineRange: app.nodes[id].lines,
+      prefer: [neighborsOf(app.nodes[id]), new Set(app.data.index.changed || [])] };
     const thread = document.getElementById("thread");
     const history = threads[id] || (threads[id] = []);
     for (const turn of history) {

@@ -68,6 +68,20 @@ class ValidateTest(unittest.TestCase):
         e["nodes"]["a.py#calc"]["sections"]["impact"] = "Chamada por [[handler]]."
         self.assertEqual(self.check(e), ["a.py#calc [impact] [[handler]] is ambiguous: a.py#handler, b.py#handler"])
 
+    def test_an_ambiguous_name_resolves_to_the_function_the_owner_calls(self):
+        index = copy.deepcopy(INDEX)
+        index["nodes"]["a.py#calc"]["links"] = [{"line": 12, "col": 0, "len": 7, "to": "b.py#handler"}]
+        e = self.changed_copy()
+        e["nodes"]["a.py#calc"]["sections"]["impact"] = "Usa [[handler]]."
+        self.assertEqual(self.check(e, index=index), [])
+
+    def test_an_ambiguous_name_in_the_story_resolves_to_the_changed_one(self):
+        index = copy.deepcopy(INDEX)
+        index["nodes"]["b.py#calc"] = node("calc", [1, 3], "unchanged", "b.py")
+        e = self.changed_copy()
+        e["overview"]["story"] = "Muda [[calc]]."
+        self.assertEqual(self.check(e, index=index), [])
+
     def test_unknown_function(self):
         e = self.changed_copy()
         e["overview"]["story"] = "Usa [[nao_existe]]."

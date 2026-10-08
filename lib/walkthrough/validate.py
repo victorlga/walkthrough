@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from walkthrough.markers import find_markers, name_index, resolve
+from walkthrough.markers import find_markers, name_index, neighbors, resolve
 
 LEVELS = {"full", "short", "summary"}
 SECTIONS = {"context", "before", "why", "steps", "impact", "relation", "syntax"}
@@ -30,7 +30,8 @@ class Problem:
         return f"{self.id} [{self.field}] {self.marker} {self.reason}"
 
 
-def check_text(owner: str, field: str, text: str, lines: Optional[list], names: Dict[str, List[str]]) -> List[Problem]:
+def check_text(owner: str, field: str, text: str, lines: Optional[list], names: Dict[str, List[str]],
+               prefer=()) -> List[Problem]:
     problems = []
     for marker in find_markers(text):
         if marker.kind == "lines":
@@ -40,7 +41,7 @@ def check_text(owner: str, field: str, text: str, lines: Optional[list], names: 
                 problems.append(Problem(owner, field, marker.raw,
                                         f"lines {marker.start}-{marker.end} are outside {lines[0]}-{lines[1]}"))
             continue
-        found, candidates = resolve(marker.target, names)
+        found, candidates = resolve(marker.target, names, prefer)
         if found is None and candidates:
             problems.append(Problem(owner, field, marker.raw, f"is ambiguous: {', '.join(candidates)}"))
         elif found is None:
@@ -80,9 +81,10 @@ def validate(index: dict, plan: dict, explanations: dict, max_skeleton: int = 12
     overview = explanations.get("overview", {})
     if not str(overview.get("story", "")).strip():
         problems.append(Problem("overview", "story", "", "the story is empty"))
-    problems += check_text("overview", "story", overview.get("story", ""), None, names)
+    changed = set(index["changed"])
+    problems += check_text("overview", "story", overview.get("story", ""), None, names, (changed,))
     for number, item in enumerate(overview.get("glossaryDivergences", [])):
-        problems += check_text("overview", f"glossaryDivergences.{number}", item, None, names)
+        problems += check_text("overview", f"glossaryDivergences.{number}", item, None, names, (changed,))
     entries = explanations.get("nodes", {})
     for node_id, entry in entries.items():
         if node_id not in nodes and node_id not in hunks:
@@ -95,7 +97,8 @@ def validate(index: dict, plan: dict, explanations: dict, max_skeleton: int = 12
         if not str(entry.get("summary", "")).strip():
             problems.append(Problem(node_id, "summary", "", "the summary is empty"))
         lines = nodes[node_id]["lines"] if node_id in nodes else None
-        problems += check_text(node_id, "summary", entry.get("summary", ""), lines, names)
+        prefer = (neighbors(nodes[node_id]), changed) if node_id in nodes else (changed,)
+        problems += check_text(node_id, "summary", entry.get("summary", ""), lines, names, prefer)
         sections = entry.get("sections", {})
         for key in sections:
             if key not in SECTIONS:
@@ -106,7 +109,7 @@ def validate(index: dict, plan: dict, explanations: dict, max_skeleton: int = 12
                 if not str(sections.get(key, "")).strip():
                     problems.append(Problem(node_id, "sections", "", f"missing section '{key}' for a {level} {status} explanation"))
         for key, text in sections.items():
-            problems += check_text(node_id, key, text, lines, names)
+            problems += check_text(node_id, key, text, lines, names, prefer)
         for line in str(sections.get("steps", "")).splitlines():
             if STEP.match(line) and not any(m.kind == "lines" for m in find_markers(line)):
                 problems.append(Problem(node_id, "steps", line.strip(), "step without a line marker"))

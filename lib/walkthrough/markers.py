@@ -40,6 +40,18 @@ def name_index(nodes: Dict[str, dict]) -> Dict[str, List[str]]:
     return {key: sorted(ids) for key, ids in index.items()}
 
 
-def resolve(target: str, index: Dict[str, List[str]]) -> Tuple[Optional[str], List[str]]:
+def resolve(target: str, index: Dict[str, List[str]], prefer=()) -> Tuple[Optional[str], List[str]]:
     candidates = index.get(target, [])
-    return (candidates[0] if len(candidates) == 1 else None), candidates
+    if len(candidates) == 1:
+        return candidates[0], candidates
+    for preferred in prefer:
+        narrowed = [c for c in candidates if c in preferred]
+        if len(narrowed) == 1:
+            return narrowed[0], candidates
+    return None, candidates
+
+
+def neighbors(node: dict) -> set:
+    linked = {link["to"] for link in node.get("links", []) if "to" in link}
+    callers = {caller["from"] for caller in node.get("callers", [])}
+    return linked | callers | set(node.get("implementations", []))
