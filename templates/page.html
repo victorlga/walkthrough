@@ -33,7 +33,7 @@ button { font: inherit; color: inherit; }
 .bar #back { border: 1px solid var(--rule); background: var(--panel); border-radius: 4px; padding: .1rem .55rem; cursor: pointer; }
 .bar #back:disabled { opacity: .4; cursor: default; }
 .trail { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem; flex: 1; min-width: 0; font-size: .9rem; }
-.trail button { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-family: var(--font-code); font-size: .85rem; }
+.trail button { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-family: var(--font-code); font-size: .85rem; overflow-wrap: anywhere; min-width: 0; text-align: left; }
 .trail span[aria-current] { font-family: var(--font-code); font-size: .85rem; font-weight: 600; overflow-wrap: anywhere; }
 .trail .sep { color: var(--muted); }
 .progress { font: .8rem var(--font-code); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }

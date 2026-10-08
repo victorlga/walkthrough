@@ -14,7 +14,7 @@ class GitError(Exception):
 
 
 def run_git(root: Path, *args, check: bool = True) -> str:
-    result = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
+    result = subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=root, capture_output=True, text=True)
     if check and result.returncode != 0:
         raise GitError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout
@@ -47,13 +47,16 @@ def diff_text(root: Path, base_sha: str) -> str:
     return run_git(root, "diff", "--no-color", "--no-ext-diff", "-U0", "-M", base_sha)
 
 
+def names(root: Path, *args) -> List[str]:
+    return [name for name in run_git(root, *args, "-z").split("\0") if name]
+
+
 def untracked_files(root: Path) -> List[str]:
-    return [line for line in run_git(root, "ls-files", "--others", "--exclude-standard").splitlines() if line]
+    return names(root, "ls-files", "--others", "--exclude-standard")
 
 
 def repo_files(root: Path) -> Set[str]:
-    tracked = {line for line in run_git(root, "ls-files").splitlines() if line}
-    return tracked | set(untracked_files(root))
+    return set(names(root, "ls-files")) | set(untracked_files(root))
 
 
 def commit_subjects(root: Path, base_sha: str) -> List[str]:
@@ -90,9 +93,18 @@ def gh_json(repo: Path, *args) -> Optional[dict]:
     return json.loads(result.stdout)
 
 
+def is_walkthrough_worktree(repo: Path, worktree: Path) -> bool:
+    blocks = run_git(repo, "worktree", "list", "--porcelain", check=False).strip().split("\n\n")
+    for block in blocks[1:]:
+        lines = block.splitlines()
+        if lines and Path(lines[0][len("worktree "):]).resolve() == worktree.resolve() and "detached" in lines:
+            return True
+    return False
+
+
 def add_worktree(repo: Path, run_dir: Path, sha: str) -> Path:
     worktree = (run_dir / "worktree").resolve()
-    if worktree.exists():
+    if worktree.exists() or is_walkthrough_worktree(repo, worktree):
         remove_worktree(repo, worktree)
     run_dir.mkdir(parents=True, exist_ok=True)
     run_git(repo, "worktree", "add", "--detach", str(worktree), sha)
@@ -100,11 +112,13 @@ def add_worktree(repo: Path, run_dir: Path, sha: str) -> Path:
 
 
 def remove_worktree(repo: Path, worktree: Path) -> None:
-    if worktree.exists():
-        run_git(repo, "worktree", "remove", "--force", str(worktree), check=False)
+    if not is_walkthrough_worktree(repo, worktree):
+        raise GitError(f"{worktree} is not a walkthrough worktree of {repo}; leaving it alone.")
+    run_git(repo, "worktree", "remove", "--force", str(worktree), check=False)
     if worktree.exists():
         shutil.rmtree(worktree)
-    run_git(repo, "worktree", "prune", check=False)
+    if is_walkthrough_worktree(repo, worktree):
+        run_git(repo, "worktree", "prune", check=False)
 
 
 def resolve_target(repo: Path, target: Optional[str], base: Optional[str], run_dir: Path) -> Target:

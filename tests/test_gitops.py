@@ -32,6 +32,20 @@ class GitopsTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_non_ascii_paths_come_out_as_written(self):
+        (self.repo / "cotação.py").write_text("x = 1\n")
+        self.assertIn("cotação.py", gitops.untracked_files(self.repo))
+        git(self.repo, "add", "cotação.py")
+        self.assertIn("+++ b/cotação.py", gitops.diff_text(self.repo, gitops.merge_base(self.repo, "main")))
+
+    def test_remove_worktree_refuses_a_folder_git_did_not_create(self):
+        folder = self.run_dir / "worktree"
+        folder.mkdir(parents=True)
+        (folder / "notes.txt").write_text("mine")
+        with self.assertRaises(gitops.GitError):
+            gitops.remove_worktree(self.repo, folder)
+        self.assertTrue((folder / "notes.txt").exists())
+
     def test_main_branch_comes_from_origin_head(self):
         self.assertEqual(gitops.default_base(self.repo), "origin/main")
 

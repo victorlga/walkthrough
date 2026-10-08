@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from helpers import git, make_fixture_repo
+from helpers import git, init_repo, make_fixture_repo
 from walkthrough.cli import main, short_list
 from walkthrough.config import Language
 
@@ -81,6 +81,37 @@ class CliTest(unittest.TestCase):
         self.assertTrue((run_dir / "worktree").exists())
         self.assertEqual(run("cleanup", run_dir)[0], 0)
         self.assertFalse((run_dir / "worktree").exists())
+
+
+    def test_cleanup_refuses_a_worktree_folder_git_did_not_create(self):
+        project = init_repo(Path(self.tmp.name) / "project")
+        (project / "worktree").mkdir()
+        (project / "worktree" / "notes.txt").write_text("mine")
+        git(project, "add", "-A")
+        git(project, "commit", "-m", "notes")
+        code, _, err = run("cleanup", project)
+        self.assertEqual(code, 1)
+        self.assertIn("not a walkthrough worktree", err)
+        self.assertTrue((project / "worktree" / "notes.txt").exists())
+
+    def test_a_failed_index_leaves_no_worktree_behind(self):
+        git(self.repo, "branch", "broken")
+        run_dir = Path(self.tmp.name) / "broken"
+        with mock.patch.object(Language, "installed", lambda self: False):
+            code, _, _ = run("index", "broken", "--repo", self.repo, "--base", "main", "--run-dir", run_dir)
+        self.assertEqual(code, 2)
+        self.assertFalse((run_dir / "worktree").exists())
+        self.assertNotIn(str(run_dir), git(self.repo, "worktree", "list"))
+
+    def test_indexing_again_drops_the_previous_explanations(self):
+        run_dir = Path(self.tmp.name) / "again"
+        self.assertEqual(run("index", "--repo", self.repo, "--base", "main", "--run-dir", run_dir)[0], 0)
+        (run_dir / "explanations.json").write_text("{}")
+        (run_dir / "plan.json").write_text("{}")
+        (run_dir / "fragments").mkdir()
+        (run_dir / "fragments" / "old.json").write_text("{}")
+        self.assertEqual(run("index", "--repo", self.repo, "--base", "main", "--run-dir", run_dir)[0], 0)
+        self.assertEqual(sorted(p.name for p in run_dir.iterdir()), ["context.json", "index.json"])
 
 
 if __name__ == "__main__":

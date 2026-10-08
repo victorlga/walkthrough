@@ -30,7 +30,7 @@ def target_slug(repo: Path, target) -> str:
 
 
 def changed_paths(root: Path, base_sha: str) -> List[str]:
-    names = {n for n in gitops.run_git(root, "diff", "--name-only", base_sha).splitlines() if n}
+    names = set(gitops.names(root, "diff", "--name-only", base_sha))
     return sorted(names | set(gitops.untracked_files(root)))
 
 
@@ -42,7 +42,7 @@ def paths_for_target(repo: Path, target, base) -> List[str]:
         return [line for line in result.stdout.splitlines() if line]
     sha = gitops.run_git(repo, "rev-parse", "--verify", f"{target}^{{commit}}").strip()
     merge = gitops.merge_base(repo, base or gitops.default_base(repo), sha)
-    return [n for n in gitops.run_git(repo, "diff", "--name-only", merge, sha).splitlines() if n]
+    return gitops.names(repo, "diff", "--name-only", merge, sha)
 
 
 def find_glossaries(root: Path, paths: List[str]) -> List[str]:
@@ -95,6 +95,22 @@ def cmd_index(args) -> int:
     except gitops.GitError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    code = 1
+    try:
+        code = index_target(args, config, repo, run_dir, target)
+    finally:
+        if code != 0 and target.worktree:
+            gitops.remove_worktree(repo, target.worktree)
+    return code
+
+
+def clear_previous_run(run_dir: Path) -> None:
+    for name in ("explanations.json", "plan.json"):
+        (run_dir / name).unlink(missing_ok=True)
+    shutil.rmtree(run_dir / "fragments", ignore_errors=True)
+
+
+def index_target(args, config, repo: Path, run_dir: Path, target) -> int:
     paths = changed_paths(target.root, target.base_sha)
     if not paths:
         print("error: there are no changes between this branch and its base", file=sys.stderr)
@@ -114,6 +130,7 @@ def cmd_index(args) -> int:
     caps = Caps(max_nodes=args.max_nodes, max_down=args.max_down, max_up=args.max_up)
     index = build_index(target.root, target.base_sha, config, caps, tuple(skip), meta,
                         log=lambda message: print(message, file=sys.stderr))
+    clear_previous_run(run_dir)
     (run_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False))
     context = {"body": target.body, "commits": gitops.commit_subjects(target.root, target.base_sha),
                "glossary": find_glossaries(target.root, paths)}
@@ -229,8 +246,12 @@ def cmd_cleanup(args) -> int:
     if not worktree.exists():
         print("no worktree to remove")
         return 0
-    common = gitops.run_git(worktree, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
-    gitops.remove_worktree(Path(common).parent, worktree.resolve())
+    try:
+        common = gitops.run_git(worktree, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+        gitops.remove_worktree(Path(common).parent, worktree.resolve())
+    except gitops.GitError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
     print(f"removed {worktree}")
     return 0
 

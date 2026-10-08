@@ -5,7 +5,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 from urllib.parse import unquote, urlparse
 
 from walkthrough import gitops
@@ -47,6 +47,11 @@ def external_package(uri: str) -> str:
         if marker in path:
             return path.split(marker, 1)[1].split("/")[0]
     return Path(path).parent.name
+
+
+def indent_of(line: str) -> int:
+    expanded = line.expandtabs(4)
+    return len(expanded) - len(expanded.lstrip())
 
 
 def split_lines(text: str) -> List[str]:
@@ -193,8 +198,21 @@ class Indexer:
             return owner
         return next((c for c in candidates if c.qualname == owner.parent), owner)
 
-    def block_owner(self, candidates: List[Candidate], block: RemovedBlock) -> Optional[Candidate]:
-        return innermost(candidates, block.after + 1) or (innermost(candidates, block.after) if block.after else None)
+    def block_owner(self, rel: str, candidates: List[Candidate], block: RemovedBlock, added: Set[int]) -> Optional[Candidate]:
+        before = innermost(candidates, block.after) if block.after else None
+        following = innermost(candidates, block.after + 1)
+        if before is not None and before == following:
+            return before
+        if following is not None and block.after + 1 in added:
+            return following
+        if before is not None and block.after in added:
+            return before
+        depth = min((indent_of(line) for line in block.lines if line.strip()), default=0)
+        text = self.lines(rel)
+        for owner in (before, following):
+            if owner is not None and owner.start <= len(text) and depth > indent_of(text[owner.start - 1]):
+                return owner
+        return None
 
     def find_changes(self) -> Tuple[List[str], List[dict]]:
         changed: List[str] = []
@@ -214,7 +232,7 @@ class Indexer:
                 elif number <= len(text) and text[number - 1].strip():
                     loose_added.append(number)
             for block in diff.removed:
-                owner = self.change_owner(candidates, self.block_owner(candidates, block))
+                owner = self.change_owner(candidates, self.block_owner(rel, candidates, block, set(diff.added)))
                 if owner:
                     owners[owner.id] = owner
                 elif any(line.strip() for line in block.lines):
@@ -263,7 +281,7 @@ class Indexer:
         added = [n for n in diff.added if candidate.start <= n <= candidate.end]
         removed = []
         for block in diff.removed:
-            owner = self.block_owner(candidates, block)
+            owner = self.block_owner(rel, candidates, block, set(diff.added))
             if owner and candidate.start <= owner.start and owner.end <= candidate.end:
                 removed.append({"after": block.after, "text": block.lines})
         status = "unchanged"

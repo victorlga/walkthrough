@@ -58,6 +58,12 @@ class DiffParseTest(unittest.TestCase):
         self.assertEqual(e.old_path, "d.txt")
         self.assertEqual(e.added, [10])
 
+    def test_quoted_paths_are_unquoted(self):
+        text = ('diff --git "a/cota\\303\\247\\303\\243o.py" "b/cota\\303\\247\\303\\243o.py"\n'
+                'new file mode 100644\n--- /dev/null\n+++ "b/cota\\303\\247\\303\\243o.py"\n@@ -0,0 +1 @@\n+x\n'
+                'diff --git "a/tab\\there.py" "b/tab\\there.py"\n--- "a/tab\\there.py"\n+++ "b/tab\\there.py"\n@@ -1 +1 @@\n-x\n+y\n')
+        self.assertEqual([f.path for f in parse_diff(text)], ["cotação.py", "tab\there.py"])
+
     def test_binary_file_has_no_lines(self):
         img = self.files["img.bin"]
         self.assertEqual(img.status, "binary")

@@ -217,7 +217,7 @@ function numberedSource(node) {
 }
 
 function storageKey(meta) {
-  return `walkthrough:v1:${meta.repo || "repo"}:${meta.slug || "head"}`;
+  return `walkthrough:v1:${meta.repo || "repo"}:${meta.slug || "head"}:${meta.head || ""}`;
 }
 
 const REQUIRED_SECTIONS = {

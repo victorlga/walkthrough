@@ -28,8 +28,31 @@ class FileDiff:
         return sum(len(block.lines) for block in self.removed)
 
 
+ESCAPES = {"a": 7, "b": 8, "t": 9, "n": 10, "v": 11, "f": 12, "r": 13, '"': 34, "\\": 92}
+
+
+def unquote(value: str) -> str:
+    if len(value) < 2 or value[0] != '"' or value[-1] != '"':
+        return value
+    out = bytearray()
+    body = value[1:-1]
+    position = 0
+    while position < len(body):
+        char = body[position]
+        if char != "\\":
+            out += char.encode()
+            position += 1
+        elif body[position + 1:position + 4].isdigit():
+            out.append(int(body[position + 1:position + 4], 8))
+            position += 4
+        else:
+            out.append(ESCAPES.get(body[position + 1], ord(body[position + 1])))
+            position += 2
+    return out.decode("utf-8", errors="replace")
+
+
 def strip_prefix(value: str) -> Optional[str]:
-    value = value.split("\t")[0]
+    value = unquote(value) if value.startswith('"') else value.split("\t")[0]
     if value == "/dev/null":
         return None
     return value[2:] if value[:2] in ("a/", "b/") else value
@@ -62,10 +85,10 @@ def parse_diff(text: str) -> List[FileDiff]:
         elif block is None and raw.startswith("deleted file mode"):
             current.status = "deleted"
         elif block is None and raw.startswith("rename from "):
-            current.old_path = raw[len("rename from "):]
+            current.old_path = unquote(raw[len("rename from "):])
             current.status = "renamed"
         elif block is None and raw.startswith("rename to "):
-            current.path = raw[len("rename to "):]
+            current.path = unquote(raw[len("rename to "):])
         elif block is None and raw.startswith("Binary files "):
             current.status = "binary"
         elif block is None and raw.startswith("--- "):

@@ -113,3 +113,9 @@ test("an ambiguous reference resolves to the preferred neighbor", () => {
   assert.ok(html.includes('data-ref="b.py#handler"'));
   assert.ok(core.renderMarkdown("Usa [[handler]].", ctx).includes("<code>handler</code>"));
 });
+
+test("explanations generated on the page belong to one head commit", () => {
+  const first = core.storageKey({ repo: "r", slug: "s", head: "aaa111" });
+  const second = core.storageKey({ repo: "r", slug: "s", head: "bbb222" });
+  assert.notStrictEqual(first, second);
+});
