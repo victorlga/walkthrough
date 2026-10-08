@@ -37,7 +37,10 @@ def default_base(root: Path) -> str:
 
 
 def merge_base(root: Path, base_ref: str, head: str = "HEAD") -> str:
-    return run_git(root, "merge-base", base_ref, head).strip()
+    found = run_git(root, "merge-base", base_ref, head, check=False).strip()
+    if not found:
+        raise GitError(f"{head} has no common history with {base_ref}. Pass --base <ref> with a commit both share.")
+    return found
 
 
 def diff_text(root: Path, base_sha: str) -> str:
@@ -120,8 +123,8 @@ def resolve_target(repo: Path, target: Optional[str], base: Optional[str], run_d
         if pr is None:
             raise GitError(f"gh could not read PR {number}. Check `gh auth status` and the PR number.")
         run_git(repo, "fetch", "origin", f"pull/{number}/head", pr["baseRefName"])
-        worktree = add_worktree(repo, run_dir, pr["headRefOid"])
         base_sha = merge_base(repo, base or f"origin/{pr['baseRefName']}", pr["headRefOid"])
+        worktree = add_worktree(repo, run_dir, pr["headRefOid"])
         return Target(root=worktree, base_sha=base_sha, label=f"PR {number}", title=pr["title"],
                       body=pr["body"] or "", slug=f"pr-{number}", worktree=worktree, pr=number)
     sha = run_git(repo, "rev-parse", "--verify", f"{target}^{{commit}}", check=False).strip()
@@ -129,7 +132,7 @@ def resolve_target(repo: Path, target: Optional[str], base: Optional[str], run_d
         sha = run_git(repo, "rev-parse", "--verify", f"origin/{target}^{{commit}}", check=False).strip()
     if not sha:
         raise GitError(f"Branch {target} does not exist locally or on origin.")
-    worktree = add_worktree(repo, run_dir, sha)
     base_sha = merge_base(repo, base or default_base(repo), sha)
+    worktree = add_worktree(repo, run_dir, sha)
     return Target(root=worktree, base_sha=base_sha, label=target, title=target, body="",
                   slug=slugify(target), worktree=worktree, pr=None)

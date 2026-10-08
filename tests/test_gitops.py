@@ -48,6 +48,19 @@ class GitopsTest(unittest.TestCase):
         self.assertIn("new.py", gitops.untracked_files(target.root))
         self.assertIn("new.py", gitops.repo_files(target.root))
 
+    def test_unrelated_history_asks_for_a_base_and_leaves_no_worktree(self):
+        git(self.repo, "checkout", "--orphan", "unrelated")
+        git(self.repo, "rm", "-rf", "--cached", ".")
+        (self.repo / "other.py").write_text("x = 1\n")
+        git(self.repo, "add", "other.py")
+        git(self.repo, "commit", "-m", "unrelated root")
+        git(self.repo, "checkout", "-f", "feature")
+        with self.assertRaises(gitops.GitError) as error:
+            gitops.resolve_target(self.repo, "unrelated", None, self.run_dir)
+        self.assertIn("no common history", str(error.exception))
+        self.assertIn("--base", str(error.exception))
+        self.assertFalse((self.run_dir / "worktree").exists())
+
     def test_a_linked_worktree_is_named_after_its_main_repo(self):
         linked = self.run_dir.parent / "some-worktree-name"
         git(self.repo, "worktree", "add", str(linked), "other")
