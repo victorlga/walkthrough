@@ -86,7 +86,7 @@ test("the explain prompt carries the rules, the path, the diff and the required 
   assert.ok(prompt.includes("Portuguese"));
   assert.ok(prompt.includes("handler > calc (called at line 21 of handler)"));
   assert.ok(prompt.includes("  12 +     return x + y"));
-  assert.ok(prompt.includes('"context", "before", "why", "steps", "impact"'));
+  assert.ok(prompt.includes('must have the key "change"'));
   assert.ok(prompt.includes("handler: Recebe a chamada."));
 });
 

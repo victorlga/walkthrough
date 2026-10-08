@@ -70,6 +70,10 @@ a.ref.seen, a.sym.seen { color: var(--muted); }
 .ext { border-bottom: 1px dashed var(--rule); }
 .frontier { border-bottom: 1px dashed var(--muted); }
 details summary { cursor: pointer; color: var(--muted); }
+.explain details { border-top: 1px solid var(--rule); padding-top: .6rem; }
+.explain details > summary { font-size: .75rem; letter-spacing: .09em; text-transform: uppercase; }
+.explain details[open] > summary { margin-bottom: .5rem; }
+.explain section.risk { border-left: 3px solid var(--del-ink); padding-left: .75rem; }
 .side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 3.3rem); display: flex; flex-direction: column; gap: .75rem;
   min-width: 0; max-height: calc(100vh - 4.6rem); }
 @media (max-width: 880px) { .side { position: static; max-height: none; } }
@@ -271,13 +275,16 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const title = `<h1>${escapeHtml(node.name)}</h1>`;
     if (!entry) return title;
     const status = node.change ? node.change.status : "unchanged";
-    const titles = { context: tr("context"), before: tr("before"), why: status === "added" ? tr("whyExists") : tr("whyChanged"),
-      steps: tr("steps"), impact: status === "added" ? tr("usedBy") : tr("impact"), relation: tr("relation") };
     const sections = entry.sections || {};
-    const body = ["context", "before", "why", "steps", "impact", "relation"].filter((key) => sections[key])
-      .map((key) => `<section><h3>${titles[key]}</h3>${renderMarkdown(sections[key], ctx)}</section>`).join("");
-    const syntax = sections.syntax ? `<details><summary>${tr("syntax")}</summary>${renderMarkdown(sections.syntax, ctx)}</details>` : "";
-    return `${title}<p class="lede">${renderInline(entry.summary || "", ctx)}</p>${body}${syntax}`;
+    const core = sections.change ? "change" : "relation";
+    const coreTitle = core === "relation" ? tr("relation") : status === "added" ? tr("adds") : tr("change");
+    const opened = store.get("open", {});
+    const section = (key, heading) => `<section class="${key}"><h3>${heading}</h3>${renderMarkdown(sections[key], ctx)}</section>`;
+    const folded = (key) => `<details data-section="${key}"${opened[key] ? " open" : ""}><summary>${tr(key)}</summary>${renderMarkdown(sections[key], ctx)}</details>`;
+    return `${title}<p class="lede">${renderInline(entry.summary || "", ctx)}</p>`
+      + (sections[core] ? section(core, coreTitle) : "")
+      + (sections.risk ? section("risk", tr("risk")) : "")
+      + ["steps", "why", "syntax"].filter((key) => sections[key]).map(folded).join("");
   }
   app.explanationHtml = explanationHtml;
 
@@ -400,6 +407,11 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     }
   });
   document.getElementById("back").addEventListener("click", back);
+  view.addEventListener("toggle", (event) => {
+    const key = event.target.dataset && event.target.dataset.section;
+    if (!key) return;
+    store.set("open", { ...store.get("open", {}), [key]: event.target.open });
+  }, true);
   view.addEventListener("mouseover", (event) => {
     const step = event.target.closest("li[data-lines]");
     if (step) highlightLines(step.dataset.lines);

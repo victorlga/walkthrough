@@ -43,4 +43,4 @@ Files changed only by renames, import moves, formatting or generation go to `mec
 
 ## The story
 
-Write `overview.story` after the plan: two to five short paragraphs, from the context to the problem to what the branch does. Use `[[name]]` markers for the functions it mentions. List each glossary and code divergence in `overview.glossaryDivergences`, one sentence each.
+Write `overview.story` after the plan: at most 130 words, in two or three short paragraphs, from the problem to what the branch does. The roteiro below it carries the details. Use `[[name]]` markers for the functions it mentions. List each glossary and code divergence in `overview.glossaryDivergences`, one sentence of at most 40 words each.

@@ -31,16 +31,18 @@ PLAN = {
 }
 
 FULL_MODIFIED = {"level": "full", "summary": "Calcula o total.", "sections": {
-    "context": "Usada por [[source-amount->spread]].", "before": "Somava tudo.", "why": "Faltava o desconto.",
-    "steps": "1. Lê a taxa [[L11]].\n2. Aplica [[new_fn]] [[L12-14]].", "impact": "Quem chama vê o desconto."}}
+    "change": "Somava tudo. Agora aplica [[new_fn]] antes de somar, e [[source-amount->spread]] recebe o valor menor.",
+    "steps": "1. Lê a taxa [[L11]].\n2. Aplica [[new_fn]] [[L12-14]].", "why": "Faltava o desconto.",
+    "risk": "Quem guardava o total antigo vê outro número."}}
 
 EXPLANATIONS = {
     "overview": {"story": "A branch passa a aplicar [[calc]] com desconto.", "glossaryDivergences": []},
     "nodes": {
         "a.py#calc": FULL_MODIFIED,
-        "a.py#new_fn": {"level": "full", "summary": "Nova.", "sections": {
-            "context": "Ajuda [[calc]].", "why": "Isolar o desconto.", "steps": "1. Divide [[L31]].",
-            "impact": "Só [[calc]] usa."}},
+        "a.py#new_fn": {"level": "full", "summary": "Calcula o desconto.", "sections": {
+            "change": "Nova. Isola o desconto que [[calc]] aplica."}},
+        "a.py#handler": {"level": "short", "summary": "Responde a requisição.", "sections": {
+            "relation": "Chama [[calc]] e devolve o total."}},
         "c.clj#source-amount->spread": {"level": "summary", "summary": "Passa a usar [[calc]]."},
         "README.md@3": {"level": "summary", "summary": "Documenta o desconto."},
     },
@@ -65,14 +67,14 @@ class ValidateTest(unittest.TestCase):
 
     def test_ambiguous_name_lists_the_candidates(self):
         e = self.changed_copy()
-        e["nodes"]["a.py#calc"]["sections"]["impact"] = "Chamada por [[handler]]."
-        self.assertEqual(self.check(e), ["a.py#calc [impact] [[handler]] is ambiguous: a.py#handler, b.py#handler"])
+        e["nodes"]["a.py#calc"]["sections"]["risk"] = "Chamada por [[handler]]."
+        self.assertEqual(self.check(e), ["a.py#calc [risk] [[handler]] is ambiguous: a.py#handler, b.py#handler"])
 
     def test_an_ambiguous_name_resolves_to_the_function_the_owner_calls(self):
         index = copy.deepcopy(INDEX)
         index["nodes"]["a.py#calc"]["links"] = [{"line": 12, "col": 0, "len": 7, "to": "b.py#handler"}]
         e = self.changed_copy()
-        e["nodes"]["a.py#calc"]["sections"]["impact"] = "Usa [[handler]]."
+        e["nodes"]["a.py#calc"]["sections"]["risk"] = "Usa [[handler]]."
         self.assertEqual(self.check(e, index=index), [])
 
     def test_an_ambiguous_name_in_the_story_resolves_to_the_changed_one(self):
@@ -92,10 +94,53 @@ class ValidateTest(unittest.TestCase):
         e["overview"]["story"] = "Veja [[L3]]."
         self.assertEqual(self.check(e), ["overview [story] [[L3]] line markers only work inside a function"])
 
-    def test_missing_section_for_a_changed_function(self):
+    def test_a_changed_function_says_how_the_change_alters_it(self):
         e = self.changed_copy()
-        del e["nodes"]["a.py#calc"]["sections"]["before"]
-        self.assertEqual(self.check(e), ["a.py#calc [sections]  missing section 'before' for a full modified explanation"])
+        del e["nodes"]["a.py#calc"]["sections"]["change"]
+        self.assertEqual(self.check(e), ["a.py#calc [sections]  missing section 'change' for a full modified explanation"])
+
+    def test_an_unchanged_function_says_how_it_connects_to_the_change(self):
+        e = self.changed_copy()
+        e["nodes"]["a.py#handler"]["sections"] = {"change": "Nada mudou."}
+        self.assertEqual(self.check(e), ["a.py#handler [sections]  missing section 'relation' for a short unchanged explanation",
+                                         "a.py#handler [sections] change is not allowed for a short unchanged explanation"])
+
+    def test_short_explanations_hold_only_the_core(self):
+        e = self.changed_copy()
+        e["nodes"]["a.py#handler"]["sections"]["steps"] = "1. Lê [[L41]]."
+        self.assertEqual(self.check(e), ["a.py#handler [sections] steps is not allowed for a short unchanged explanation"])
+
+    def test_a_summary_is_one_sentence_and_nothing_else(self):
+        e = self.changed_copy()
+        e["nodes"]["c.clj#source-amount->spread"]["sections"] = {"change": "Passa a usar [[calc]]."}
+        self.assertEqual(self.check(e), ["c.clj#source-amount->spread [sections] change is not allowed for a summary modified explanation"])
+
+    def test_the_long_sections_of_earlier_versions_are_unknown(self):
+        e = self.changed_copy()
+        e["nodes"]["a.py#calc"]["sections"]["context"] = "Usada pela API."
+        self.assertEqual(self.check(e), ["a.py#calc [sections] context is not a known section"])
+
+    def test_the_change_fits_a_quick_read(self):
+        e = self.changed_copy()
+        e["nodes"]["a.py#calc"]["sections"]["change"] = " ".join(["palavra"] * 61)
+        self.assertEqual(self.check(e), ["a.py#calc [change]  has 61 words, the limit is 60"])
+
+    def test_line_markers_do_not_count_as_words(self):
+        e = self.changed_copy()
+        e["nodes"]["a.py#calc"]["summary"] = " ".join(["palavra"] * 25) + " [[L11]]"
+        self.assertEqual(self.check(e), [])
+
+    def test_steps_stay_few_and_short(self):
+        e = self.changed_copy()
+        steps = "\n".join(f"{n}. Faz [[L11]]." for n in range(1, 8))
+        e["nodes"]["a.py#calc"]["sections"]["steps"] = steps + "\n8. " + " ".join(["longo"] * 25) + " [[L12]]."
+        self.assertEqual(self.check(e), ["a.py#calc [steps]  has 8 steps, the limit is 6",
+                                         "a.py#calc [steps] 8. has 26 words, the limit is 25"])
+
+    def test_the_story_stays_short(self):
+        e = self.changed_copy()
+        e["overview"]["story"] = "Muda [[calc]]. " + " ".join(["palavra"] * 130)
+        self.assertEqual(self.check(e), ["overview [story]  has 132 words, the limit is 130"])
 
     def test_every_step_needs_a_line_marker(self):
         e = self.changed_copy()

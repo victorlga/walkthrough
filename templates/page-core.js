@@ -9,9 +9,8 @@ const STRINGS = {
     route: "Roteiro", entryPoints: "Pontos de entrada afetados", otherChanges: "Outras mudanças",
     hunks: "Trechos sem código", mechanical: "Mudanças mecânicas", divergences: "Glossário e código divergem",
     changesSeen: "mudanças vistas", cameFrom: "veio de", line: "linha", callers: "Quem chama", tests: "Testes",
-    implementations: "Implementações", context: "Contexto", before: "Como era", whyChanged: "Por que mudou",
-    whyExists: "Por que existe", steps: "Passo a passo", impact: "Quem é afetado", usedBy: "Quem usa",
-    relation: "Como se liga à mudança", syntax: "Sintaxe usada aqui", explain: "Explicar", stop: "Parar",
+    implementations: "Implementações", change: "O que mudou", adds: "O que acrescenta", why: "Por quê",
+    steps: "Passo a passo", risk: "Risco", relation: "Como se liga à mudança", syntax: "Sintaxe usada aqui", explain: "Explicar", stop: "Parar",
     thinking: "Pensando...", ask: "Pergunte sobre esta função", send: "Enviar", copy: "Copiar",
     copied: "Copiado", askInChat: "Sem explicação ainda. Cole no chat do Claude Code:", rateLimited: "Limite de uso atingido. Tente de novo daqui a pouco.",
     failed: "A resposta falhou. Tente de novo.", lostLinks: "Sem links em", pruned: "Explicações removidas por erro",
@@ -24,9 +23,8 @@ const STRINGS = {
     route: "Reading route", entryPoints: "Affected entry points", otherChanges: "Other changes",
     hunks: "Changes outside code", mechanical: "Mechanical changes", divergences: "Glossary and code disagree",
     changesSeen: "changes seen", cameFrom: "came from", line: "line", callers: "Called by", tests: "Tests",
-    implementations: "Implementations", context: "Context", before: "Before", whyChanged: "Why it changed",
-    whyExists: "Why it exists", steps: "Step by step", impact: "Who is affected", usedBy: "Used by",
-    relation: "How it connects to the change", syntax: "Syntax used here", explain: "Explain", stop: "Stop",
+    implementations: "Implementations", change: "What changed", adds: "What it adds", why: "Why",
+    steps: "Step by step", risk: "Risk", relation: "How it connects to the change", syntax: "Syntax used here", explain: "Explain", stop: "Stop",
     thinking: "Thinking...", ask: "Ask about this function", send: "Send", copy: "Copy",
     copied: "Copied", askInChat: "No explanation yet. Paste this into Claude Code:", rateLimited: "Usage limit reached. Try again in a moment.",
     failed: "The answer failed. Try again.", lostLinks: "No links in", pruned: "Explanations removed after errors",
@@ -220,11 +218,7 @@ function storageKey(meta) {
   return `walkthrough:v1:${meta.repo || "repo"}:${meta.slug || "head"}:${meta.head || ""}`;
 }
 
-const REQUIRED_SECTIONS = {
-  added: ["context", "why", "steps", "impact"],
-  modified: ["context", "before", "why", "steps", "impact"],
-  unchanged: ["context", "steps", "relation"],
-};
+const CORE_SECTION = { added: "change", modified: "change", unchanged: "relation" };
 const LANGUAGE_NAMES = { pt: "Portuguese", en: "English" };
 
 function summaryOf(data, id) {
@@ -263,12 +257,12 @@ function contextBlock({ data, id, stack }) {
 function explainPrompt(ctx) {
   const node = ctx.data.index.nodes[ctx.id];
   const status = (node.change && node.change.status) || "unchanged";
-  const keys = REQUIRED_SECTIONS[status] || REQUIRED_SECTIONS.unchanged;
+  const core = CORE_SECTION[status] || CORE_SECTION.unchanged;
   return [
     "You explain code to a reviewer who is reading a walkthrough of a branch. Follow these rules exactly:",
     ctx.data.rules || "",
     contextBlock(ctx),
-    `Return only JSON shaped as {"summary": "one sentence starting with a verb", "sections": {...}}. The sections object must have exactly these keys: ${keys.map((k) => `"${k}"`).join(", ")}. You may add "syntax" for language constructs a newcomer would trip on.`,
+    `Return only JSON shaped as {"summary": "one sentence starting with a verb", "sections": {...}}. The sections object must have the key "${core}". Add "steps", "why", "risk" or "syntax" only when they tell the reader something the code beside it does not show. Keep to the word limits in the rules.`,
     `Mark lines of this function with [[L${node.lines[0]}]] or [[L${node.lines[0]}-${node.lines[0] + 1}]], staying between ${node.lines[0]} and ${node.lines[1]}. Mark other functions with [[name]], using only names listed above. Every numbered step in "steps" needs a line marker.`,
   ].join("\n\n");
 }
@@ -322,6 +316,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STRINGS, t, parseMarkers, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
     codeRows, lineSpans, lineSegments, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
-    REQUIRED_SECTIONS, contextBlock, explainPrompt, askTurns, askTools,
+    CORE_SECTION, contextBlock, explainPrompt, askTurns, askTools,
   };
 }

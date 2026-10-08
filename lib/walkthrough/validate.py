@@ -7,16 +7,31 @@ from typing import Dict, List, Optional
 from walkthrough.markers import find_markers, name_index, neighbors, resolve
 
 LEVELS = {"full", "short", "summary"}
-SECTIONS = {"context", "before", "why", "steps", "impact", "relation", "syntax"}
-REQUIRED = {
-    ("full", "added"): ["context", "why", "steps", "impact"],
-    ("full", "modified"): ["context", "before", "why", "steps", "impact"],
-    ("full", "unchanged"): ["context", "steps", "relation"],
-    ("short", "added"): ["context", "relation"],
-    ("short", "modified"): ["context", "relation"],
-    ("short", "unchanged"): ["context", "relation"],
-}
+SECTIONS = {"change", "relation", "steps", "why", "risk", "syntax"}
+WORDS = {"summary": 25, "change": 60, "relation": 40, "why": 50, "risk": 50, "syntax": 60}
+STORY_WORDS = 130
+DIVERGENCE_WORDS = 40
+MAX_STEPS = 6
+STEP_WORDS = 25
 STEP = re.compile(r"^\s*\d+[.)]\s+")
+LINE_MARKER = re.compile(r"\[\[L\d+(?:-L?\d+)?\]\]")
+
+
+def core_section(status: str) -> str:
+    return "change" if status in ("added", "modified") else "relation"
+
+
+def allowed_sections(level: str, status: str) -> set:
+    core = core_section(status)
+    if level == "summary":
+        return set()
+    if level == "short":
+        return {core}
+    return SECTIONS - ({"change", "relation"} - {core})
+
+
+def word_count(text: str) -> int:
+    return len(LINE_MARKER.sub(" ", str(text)).split())
 
 
 @dataclass
@@ -46,6 +61,25 @@ def check_text(owner: str, field: str, text: str, lines: Optional[list], names: 
             problems.append(Problem(owner, field, marker.raw, f"is ambiguous: {', '.join(candidates)}"))
         elif found is None:
             problems.append(Problem(owner, field, marker.raw, "is not a function in the index"))
+    return problems
+
+
+def check_length(owner: str, field: str, text: str, limit: int, marker: str = "") -> List[Problem]:
+    count = word_count(text)
+    return [Problem(owner, field, marker, f"has {count} words, the limit is {limit}")] if count > limit else []
+
+
+def check_steps(owner: str, text: str) -> List[Problem]:
+    problems = []
+    steps = [line for line in str(text).splitlines() if STEP.match(line)]
+    for line in steps:
+        if not any(m.kind == "lines" for m in find_markers(line)):
+            problems.append(Problem(owner, "steps", line.strip(), "step without a line marker"))
+    if len(steps) > MAX_STEPS:
+        problems.append(Problem(owner, "steps", "", f"has {len(steps)} steps, the limit is {MAX_STEPS}"))
+    for line in steps:
+        prefix = STEP.match(line).group()
+        problems += check_length(owner, "steps", line[len(prefix):], STEP_WORDS, prefix.strip())
     return problems
 
 
@@ -83,8 +117,10 @@ def validate(index: dict, plan: dict, explanations: dict, max_skeleton: int = 12
         problems.append(Problem("overview", "story", "", "the story is empty"))
     changed = set(index["changed"])
     problems += check_text("overview", "story", overview.get("story", ""), None, names, (changed,))
+    problems += check_length("overview", "story", overview.get("story", ""), STORY_WORDS)
     for number, item in enumerate(overview.get("glossaryDivergences", [])):
         problems += check_text("overview", f"glossaryDivergences.{number}", item, None, names, (changed,))
+        problems += check_length("overview", f"glossaryDivergences.{number}", item, DIVERGENCE_WORDS)
     entries = explanations.get("nodes", {})
     for node_id, entry in entries.items():
         if node_id not in nodes and node_id not in hunks:
@@ -99,20 +135,23 @@ def validate(index: dict, plan: dict, explanations: dict, max_skeleton: int = 12
         lines = nodes[node_id]["lines"] if node_id in nodes else None
         prefer = (neighbors(nodes[node_id]), changed) if node_id in nodes else (changed,)
         problems += check_text(node_id, "summary", entry.get("summary", ""), lines, names, prefer)
+        problems += check_length(node_id, "summary", entry.get("summary", ""), WORDS["summary"])
         sections = entry.get("sections", {})
+        status = nodes[node_id]["change"]["status"] if node_id in nodes else None
+        if status and level != "summary":
+            core = core_section(status)
+            if not str(sections.get(core, "")).strip():
+                problems.append(Problem(node_id, "sections", "", f"missing section '{core}' for a {level} {status} explanation"))
         for key in sections:
             if key not in SECTIONS:
                 problems.append(Problem(node_id, "sections", key, "is not a known section"))
-        if node_id in nodes:
-            status = nodes[node_id]["change"]["status"]
-            for key in REQUIRED.get((level, status), []):
-                if not str(sections.get(key, "")).strip():
-                    problems.append(Problem(node_id, "sections", "", f"missing section '{key}' for a {level} {status} explanation"))
+            elif status and key not in allowed_sections(level, status):
+                problems.append(Problem(node_id, "sections", key, f"is not allowed for a {level} {status} explanation"))
         for key, text in sections.items():
             problems += check_text(node_id, key, text, lines, names, prefer)
-        for line in str(sections.get("steps", "")).splitlines():
-            if STEP.match(line) and not any(m.kind == "lines" for m in find_markers(line)):
-                problems.append(Problem(node_id, "steps", line.strip(), "step without a line marker"))
+            if key in WORDS:
+                problems += check_length(node_id, key, text, WORDS[key])
+        problems += check_steps(node_id, sections.get("steps", ""))
     mechanical = set(plan.get("mechanical", {}).get("paths", []))
     for node_id in plan.get("skeleton", []):
         if node_id not in pruned and entries.get(node_id, {}).get("level") != "full":
