@@ -56,6 +56,11 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn("</script>", raw)
         self.assertEqual(self.data_of(out.read_text())["index"]["nodes"]["a.py#seed"]["source"].split("\n")[1], "    return '</script>'")
 
+    def test_the_default_page_opens_in_any_browser(self):
+        out = self.run_dir / "default.html"
+        render(self.run_dir, out)
+        self.assertTrue(out.read_text().startswith("<!doctype html>"))
+
     def test_local_mode_is_a_full_document(self):
         out = self.run_dir / "local.html"
         render(self.run_dir, out, mode="local", lang="en")

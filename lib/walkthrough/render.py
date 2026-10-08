@@ -44,7 +44,7 @@ def trim(data: dict, max_bytes: int) -> int:
     return len(removed)
 
 
-def render(run_dir: Path, out: Path, mode: str = "artifact", lang: str = "pt", max_bytes: int = MAX_BYTES) -> dict:
+def render(run_dir: Path, out: Path, mode: str = "local", lang: str = "pt", max_bytes: int = MAX_BYTES) -> dict:
     index = json.loads((run_dir / "index.json").read_text())
     plan_path = run_dir / "plan.json"
     plan = json.loads(plan_path.read_text()) if plan_path.exists() else EMPTY_PLAN

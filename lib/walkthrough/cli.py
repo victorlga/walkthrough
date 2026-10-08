@@ -359,7 +359,7 @@ def build_parser() -> argparse.ArgumentParser:
     render_cmd = sub.add_parser("render", help="build the page")
     render_cmd.add_argument("run_dir")
     render_cmd.add_argument("--out", required=True)
-    render_cmd.add_argument("--mode", choices=["artifact", "local"], default="artifact")
+    render_cmd.add_argument("--mode", choices=["local", "artifact"], default="local")
     render_cmd.add_argument("--lang", default="pt")
     render_cmd.set_defaults(func=cmd_render)
     return parser

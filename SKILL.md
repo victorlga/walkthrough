@@ -31,15 +31,15 @@ Follow `references/dosing.md` and write `RUN_DIR/plan.json`.
 
 Write `RUN_DIR/fragments/overview.json` as `{"overview": {"story": "...", "glossaryDivergences": []}}`, following `references/explanation-format.md`, then run `W merge RUN_DIR RUN_DIR/fragments/overview.json`.
 
-## 5. Explain in parallel
+## 5. Explain
 
-Dispatch subagents in one message, so they run at once:
+Split the work into these batches:
 
 - one per skeleton function, level `full`;
 - batches of about 40 for the `summary` of every function in `other` and of every hunk, with the ids in a file, one per line. One line per function is cheap, so these batches may run on a faster model;
 - in a small PR, batches of about ten for `short` explanations of direct neighbors and tests.
 
-Give each subagent this prompt, filled in:
+If you can run subagents, start one per batch, all at once. Otherwise work through the batches yourself, in the same order. Either way, each batch follows this prompt, filled in:
 
 ```
 Write walkthrough explanations for: <ids, or "every id listed in <file>">, level <level>, in <language>.
@@ -53,19 +53,17 @@ Then run `W merge RUN_DIR RUN_DIR/fragments/*.json`.
 
 ## 6. Validate
 
-Run `W validate RUN_DIR`. Send each failing id back to a subagent with the exact problem lines, at most two rounds. Then run `W validate RUN_DIR --prune` and tell the user which explanations were removed. A pruned function can still be explained later from the page or the chat.
+Run `W validate RUN_DIR`. Fix each failing id against the exact problem lines, yourself or through a subagent, at most two rounds. Then run `W validate RUN_DIR --prune` and tell the user which explanations were removed. A pruned function can still be explained later.
 
-## 7. Render and publish
-
-With the Artifact tool, render into the session scratchpad and publish:
+## 7. Render
 
 ```bash
-W render RUN_DIR --out <scratchpad>/<slug>-walkthrough.html --lang <conversation language code>
+W render RUN_DIR --out RUN_DIR/walkthrough.html --lang <conversation language code>
 ```
 
-Publish that file with `icon: "code"`, `capabilities: {"sample": {}}` and a one-sentence `description`. The page already follows the artifact page contract. Re-rendering to the same path in this conversation updates the same link.
+Open the file in the user's browser: `open` on macOS, `xdg-open` on Linux, `start` on Windows.
 
-Without the Artifact tool, use `--mode local --out RUN_DIR/walkthrough.html` and open the file with `open`.
+If you can publish HTML pages to a host that gives pages an in-page model through a `sample` capability, render with `--mode artifact` instead and publish the file with that capability declared. The page then adds an Explain button and a question box under each function. It works without them everywhere else.
 
 Report the link, the counts and every warning `render` printed: lost links, pruned explanations, cut functions. Tell the user the keys once: `n` goes to the next step of the roteiro, Backspace or Ctrl-O goes back, `e` asks for an explanation.
 
@@ -75,12 +73,12 @@ Run `W cleanup RUN_DIR` at the end, also after a failure. It removes the tempora
 
 ## 9. Deepen later
 
-When the user asks to explain a function or a part, dispatch subagents for those ids with level `full`, then merge, validate, render to the same path and republish.
+When the user asks to explain a function or a part, write `full` explanations for those ids as in step 5, then merge, validate and render to the same path.
 
 ## Rules that are easy to break
 
 - Links come only from the index. Explanations may cite only functions the index has, and the validator rejects the rest. Never hand-edit a link into the page.
 - Never invent the reason for a change. "The reason is not recorded" is a correct answer.
-- The page calls Claude only when the viewer clicks. Never add timers or automatic calls to the template.
-- Never commit, push or comment anywhere. This skill only reads the repo and writes to RUN_DIR and the scratchpad.
+- The page calls a model only when the viewer clicks. Never add timers or automatic calls to the template.
+- Never commit, push or comment anywhere. This skill only reads the repo and writes to RUN_DIR.
 - Code is the source of truth over any glossary. Report divergences, do not smooth them over.
