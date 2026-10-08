@@ -24,8 +24,12 @@ class TypeScriptIndexTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_changed_functions(self):
-        self.assertEqual(self.index["changed"], ["src/api.ts#handler", P + "discount", P + "basePrice"])
+        self.assertEqual(self.index["changed"], ["src/api.ts#handler", P + "discount", P + "basePrice", "src/store.ts#PriceStore"])
         self.assertEqual(self.nodes[P + "discount"]["change"]["status"], "added")
+
+    def test_a_new_field_counts_as_a_change_to_its_interface(self):
+        self.assertNotIn("src/store.ts#PriceStore.label", self.index["changed"])
+        self.assertEqual(self.nodes["src/store.ts#PriceStore"]["change"]["status"], "modified")
 
     def test_links_skip_the_local_constant(self):
         self.assertEqual(sorted({l.get("to") for l in self.nodes[P + "basePrice"]["links"]}), [P + "RATE", P + "discount"])

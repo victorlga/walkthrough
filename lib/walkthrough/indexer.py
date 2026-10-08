@@ -26,6 +26,7 @@ class Caps:
 
 
 EXPANDING_KINDS = {"function", "method", "constructor", "other", "toplevel"}
+DATA_MEMBER_KINDS = {"property", "field", "enum-member"}
 
 
 class RootLost(Exception):
@@ -187,6 +188,11 @@ class Indexer:
             self.path_by_id[node_id] = rel
         return self.known[node_id]
 
+    def change_owner(self, candidates: List[Candidate], owner: Optional[Candidate]) -> Optional[Candidate]:
+        if owner is None or owner.kind not in DATA_MEMBER_KINDS or not owner.parent:
+            return owner
+        return next((c for c in candidates if c.qualname == owner.parent), owner)
+
     def block_owner(self, candidates: List[Candidate], block: RemovedBlock) -> Optional[Candidate]:
         return innermost(candidates, block.after + 1) or (innermost(candidates, block.after) if block.after else None)
 
@@ -202,13 +208,13 @@ class Indexer:
             loose_added: List[int] = []
             loose_blocks: List[RemovedBlock] = []
             for number in diff.added:
-                owner = innermost(candidates, number)
+                owner = self.change_owner(candidates, innermost(candidates, number))
                 if owner:
                     owners[owner.id] = owner
                 elif number <= len(text) and text[number - 1].strip():
                     loose_added.append(number)
             for block in diff.removed:
-                owner = self.block_owner(candidates, block)
+                owner = self.change_owner(candidates, self.block_owner(candidates, block))
                 if owner:
                     owners[owner.id] = owner
                 elif any(line.strip() for line in block.lines):
