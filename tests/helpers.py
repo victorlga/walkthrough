@@ -18,3 +18,20 @@ def init_repo(path):
     git(path, "config", "user.email", "walkthrough@example.com")
     git(path, "config", "user.name", "Walkthrough Test")
     return path
+import shutil
+
+
+def make_fixture_repo(name, tmp):
+    repo = init_repo(Path(tmp) / name)
+    shutil.copytree(FIXTURES / name / "base", repo, dirs_exist_ok=True)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-m", "base")
+    git(repo, "checkout", "-b", "feature")
+    shutil.copytree(FIXTURES / name / "head", repo, dirs_exist_ok=True)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-m", "change")
+    return repo.resolve()
+
+
+def base_sha(repo):
+    return git(repo, "rev-parse", "main").strip()
