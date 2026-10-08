@@ -52,6 +52,11 @@ class CliTest(unittest.TestCase):
         self.assertIn("  14 +     note", out)
         self.assertIn("tests/test_pricing.py#test_base_price (test)", out)
 
+    def test_context_shows_a_hunk_the_way_the_page_does(self):
+        code, out, _ = run("context", self.run_dir, "README.md@3")
+        self.assertEqual(code, 0)
+        self.assertIn("   3 + Prices now include a discount.", out)
+
     def test_doctor_names_the_languages_in_the_diff(self):
         code, out, _ = run("doctor", "--repo", self.repo, "--base", "main")
         self.assertEqual(code, 0)

@@ -13,7 +13,7 @@ from walkthrough.config import Config, Language
 from walkthrough.diffparse import FileDiff, RemovedBlock, parse_diff
 from walkthrough.graph import entry_points, impact_paths, parts, signals
 from walkthrough.lsp import LspError, LspServer, uri_to_path
-from walkthrough.symbols import Candidate, assign_ids, innermost, node_candidates
+from walkthrough.symbols import Candidate, assign_ids, include_leading_comments, innermost, node_candidates
 from walkthrough.tokens import decode_semantic_tokens, linkable, regex_tokens
 
 
@@ -52,6 +52,25 @@ def external_package(uri: str) -> str:
 def indent_of(line: str) -> int:
     expanded = line.expandtabs(4)
     return len(expanded) - len(expanded.lstrip())
+
+
+def block_around(text: List[str], first: int, last: int, margin: int = 20, limit: int = 80) -> Tuple[int, int]:
+    count = len(text)
+
+    def blank(number: int) -> bool:
+        return not text[number - 1].strip()
+
+    def inside(number: int) -> bool:
+        return not blank(number) and (indent_of(text[number - 1]) > 0 or text[number - 1].lstrip()[:1] in ")]}")
+
+    start, end = max(1, first), min(count, last)
+    while start > 1 and (not blank(start - 1) or (start > 2 and inside(start) and not blank(start - 2))):
+        start -= 1
+    while end < count and (not blank(end + 1) or (end + 2 <= count and inside(end + 2))):
+        end += 1
+    if end - start + 1 > limit:
+        start, end = max(start, first - margin), min(end, last + margin)
+    return start, end
 
 
 def split_lines(text: str) -> List[str]:
@@ -162,6 +181,8 @@ class Indexer:
                 symbols = []
             found = [c for c in node_candidates(symbols) if not self.is_alias(rel, c)]
             assign_ids(rel, found)
+            language = self.config.language_for(rel)
+            include_leading_comments(found, self.lines(rel), language.line_comment if language else ())
             for candidate in found:
                 self.known[candidate.id] = candidate
                 self.path_by_id[candidate.id] = rel
@@ -251,16 +272,29 @@ class Indexer:
             else:
                 groups.append([event])
         added_set = set(added)
-        hunks = []
+        spans: List[list] = []
         for group in groups:
+            if text:
+                low = max(1, int(group[0][0]))
+                high = min(len(text), max(low, int(group[-1][0] + 0.5)))
+                spans.append([*block_around(text, low, high), group])
+            else:
+                spans.append([0, 0, group])
+        merged: List[list] = []
+        for span in spans:
+            if merged and text and span[0] <= merged[-1][1] + 1:
+                merged[-1][1] = max(merged[-1][1], span[1])
+                merged[-1][2] = merged[-1][2] + span[2]
+            else:
+                merged.append(span)
+        hunks = []
+        for first, last, group in merged:
             group_blocks = [item for _, item in group if isinstance(item, RemovedBlock)]
             lines: List[dict] = []
             if not text:
                 for block in group_blocks:
                     lines.extend({"n": None, "kind": "del", "text": t} for t in block.lines)
             else:
-                first = max(1, int(group[0][0]) - 2)
-                last = min(len(text), int(group[-1][0] + 0.5) + 2)
                 by_after: Dict[int, List[str]] = {}
                 for block in group_blocks:
                     by_after.setdefault(block.after, []).extend(block.lines)

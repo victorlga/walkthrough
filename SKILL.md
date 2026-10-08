@@ -43,8 +43,8 @@ Give each subagent this prompt, filled in:
 
 ```
 Write walkthrough explanations for: <ids, or "every id listed in <file>">, level <level>, in <language>.
-For each id with "#", run `<W> context <RUN_DIR> '<id>'` (quoted: ids can hold parentheses) and read <skill dir>/references/explanation-format.md.
-Ids with "@" are hunks: read them with `git -C <meta.root> diff <meta.base> -- <path before the @>`. Hunk summaries have no line markers.
+For each id, run `<W> context <RUN_DIR> '<id>'` (quoted: ids can hold parentheses) and read <skill dir>/references/explanation-format.md.
+Ids with "@" are hunks outside any function. Their summaries have no line markers.
 You may read files under <meta.root> and run git log there. Glossary: <glossary paths>.
 Write {"nodes": {"<id>": {...}}} to <RUN_DIR>/fragments/<batch>.json. Reply with the path only.
 ```

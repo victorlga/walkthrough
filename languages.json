@@ -19,7 +19,8 @@
       "command": ["clojure-lsp"],
       "install": "brew install clojure-lsp/brew/clojure-lsp-native",
       "identifierPattern": "[A-Za-z*+!_?<>=][A-Za-z0-9*+!_?<>=.\\-/']*",
-      "implementationPattern": "^\\s*\\((defmulti|defprotocol)\\s"
+      "implementationPattern": "^\\s*\\((defmulti|defprotocol)\\s",
+      "lineComment": [";"]
     },
     "typescript": {
       "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
@@ -28,7 +29,8 @@
       "command": ["tsc", "--lsp", "--stdio"],
       "install": "npm install -g typescript@latest",
       "check": {"command": ["tsc", "--lsp", "--help"], "expect": "Usage of lsp"},
-      "identifierPattern": "[A-Za-z_$][A-Za-z0-9_$]*"
+      "identifierPattern": "[A-Za-z_$][A-Za-z0-9_$]*",
+      "lineComment": ["//", "/*", "*"]
     },
     "python": {
       "extensions": [".py"],
@@ -37,7 +39,8 @@
       "command": ["basedpyright-langserver", "--stdio"],
       "install": "npm install -g basedpyright",
       "openMentions": true,
-      "identifierPattern": "[A-Za-z_][A-Za-z0-9_]*"
+      "identifierPattern": "[A-Za-z_][A-Za-z0-9_]*",
+      "lineComment": ["#"]
     }
   }
 }

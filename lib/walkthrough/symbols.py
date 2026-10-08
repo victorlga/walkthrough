@@ -81,3 +81,15 @@ def innermost(candidates: List[Candidate], line: int) -> Optional[Candidate]:
     if not containing:
         return None
     return max(containing, key=lambda c: (c.depth, -(c.end - c.start)))
+
+
+def include_leading_comments(candidates: List[Candidate], lines: List[str], prefixes: tuple) -> None:
+    if not prefixes:
+        return
+    for candidate in candidates:
+        line = candidate.start - 1
+        while line >= 1 and lines[line - 1].strip().startswith(prefixes) and not any(
+                other is not candidate and other.start <= line <= other.end
+                and not (other.start <= candidate.start and candidate.end <= other.end) for other in candidates):
+            line -= 1
+        candidate.start = line + 1

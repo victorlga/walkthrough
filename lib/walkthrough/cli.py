@@ -178,6 +178,13 @@ def cmd_context(args) -> int:
     run_dir = Path(args.run_dir)
     index, context = load_run(run_dir)
     node = index["nodes"].get(args.id)
+    hunk = next((h for h in index.get("hunks", []) if h["id"] == args.id), None)
+    if node is None and hunk is not None:
+        marks = {"add": "+", "del": "-", "ctx": " "}
+        print(f"# {hunk['id']} (hunk outside any function) {hunk['path']}")
+        for line in hunk["lines"]:
+            print(f"{str(line['n']).rjust(4) if line['n'] else '    '} {marks[line['kind']]} {line['text']}")
+        return 0
     if node is None:
         print(f"error: {args.id} is not in the index", file=sys.stderr)
         return 1

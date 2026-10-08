@@ -54,6 +54,7 @@ class Language:
     check_command: Optional[tuple] = None
     check_expect: Optional[str] = None
     open_mentions: bool = False
+    line_comment: tuple = ()
 
     def installed(self) -> bool:
         if shutil.which(self.command[0]) is None:
@@ -111,6 +112,7 @@ def load_config(path: Optional[Path] = None) -> Config:
             check_command=tuple(entry["check"]["command"]) if "check" in entry else None,
             check_expect=entry["check"]["expect"] if "check" in entry else None,
             open_mentions=bool(entry.get("openMentions", False)),
+            line_comment=tuple(entry.get("lineComment", [])),
         )
     return Config(
         languages=languages,
