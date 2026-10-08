@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from helpers import git, make_fixture_repo
-from walkthrough.cli import main
+from walkthrough.cli import main, short_list
 from walkthrough.config import Language
 
 
@@ -41,6 +41,10 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("app/pricing.py#base_price | modified", out)
         self.assertIn("entry points: app/api.py#handler", out)
+
+    def test_long_lists_in_the_summary_show_fifteen_and_a_count(self):
+        self.assertEqual(short_list([f"e{n}" for n in range(20)]), ", ".join(f"e{n}" for n in range(15)) + " (+5 more)")
+        self.assertEqual(short_list([]), "none")
 
     def test_context_shows_numbered_source_with_diff_marks_and_callers(self):
         code, out, _ = run("context", self.run_dir, "app/pricing.py#base_price")

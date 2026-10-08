@@ -57,6 +57,13 @@ def find_glossaries(root: Path, paths: List[str]) -> List[str]:
     return sorted(found)
 
 
+def short_list(items: List[str], limit: int = 15) -> str:
+    if not items:
+        return "none"
+    extra = f" (+{len(items) - limit} more)" if len(items) > limit else ""
+    return ", ".join(items[:limit]) + extra
+
+
 def load_run(run_dir: Path):
     index = json.loads((run_dir / "index.json").read_text())
     context_path = run_dir / "context.json"
@@ -134,9 +141,9 @@ def cmd_summary(args) -> int:
     print("suggested parts:")
     for number, part in enumerate(index["parts"], 1):
         print(f"  {number}: {', '.join(part)}")
-    print(f"entry points: {', '.join(index['entryPoints']) or 'none'}")
-    print(f"test entry points: {', '.join(index['testEntryPoints']) or 'none'}")
-    print(f"hunks: {', '.join(h['id'] for h in index['hunks']) or 'none'}")
+    print(f"entry points: {short_list(index['entryPoints'])}")
+    print(f"test entry points: {short_list(index['testEntryPoints'])}")
+    print(f"hunks: {short_list([h['id'] for h in index['hunks']], 50)}")
     for lost in index["lostLinks"]:
         print(f"lost links: {lost['language']} at {lost['root']}: {lost['reason']}")
     print(f"functions indexed: {len(index['nodes'])}" + (" (hit max nodes)" if index["truncated"]["maxNodesHit"] else ""))
