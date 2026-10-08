@@ -86,7 +86,9 @@ details summary { cursor: pointer; color: var(--muted); }
 .code .where { font-family: var(--font-code); overflow-wrap: anywhere; }
 .code .scroll { overflow: auto; flex: 1; position: relative; }
 .list { display: flex; flex-wrap: wrap; gap: .3rem .9rem; }
-.list strong { color: var(--ink); font-weight: 600; }
+.people > summary { color: var(--ink); font-weight: 600; }
+.people .count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.people[open] > summary { margin-bottom: .3rem; }
 table.src { border-collapse: collapse; font: .84rem/1.55 var(--font-code); width: max-content; min-width: 100%; }
 table.src td { padding: 0 .55rem; white-space: pre; vertical-align: top; }
 td.n { color: var(--muted); text-align: right; user-select: none; font-variant-numeric: tabular-nums; }
@@ -354,17 +356,20 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     if (first && first.offsetTop > scroll.clientHeight * 0.6) scroll.scrollTop = Math.max(0, first.offsetTop - scroll.clientHeight / 3);
   }
 
-  function peopleList(label, ids) {
+  function peopleList(label, ids, open) {
     if (!ids.length) return "";
-    return `<div class="list"><strong>${label}</strong>${ids.map((entry) => nodes[entry.id]
+    const links = ids.map((entry) => nodes[entry.id]
       ? `<a class="ref${visited.has(entry.id) ? " seen" : ""}" href="#" data-ref="${escapeHtml(entry.id)}">${escapeHtml(nodes[entry.id].name)}</a>`
-      : `<span class="frontier" title="${escapeHtml(entry.where)}">${escapeHtml(entry.name)}</span>`).join("")}</div>`;
+      : `<span class="frontier" title="${escapeHtml(entry.where)}">${escapeHtml(entry.name)}</span>`).join("");
+    return `<details class="people"${open ? " open" : ""}><summary>${label} <span class="count">${ids.length}</span></summary><div class="list">${links}</div></details>`;
   }
 
   function footerHtml(node) {
     const callers = (node.callers || []).map((c) => ({ id: c.from, where: `${c.path}:${c.line}`, name: c.from.split(/[#@]/).pop(), test: c.test }));
-    const parts = [peopleList(tr("callers"), callers.filter((c) => !c.test)), peopleList(tr("tests"), callers.filter((c) => c.test)),
-      peopleList(tr("implementations"), (node.implementations || []).map((id) => ({ id, where: id, name: id })))].join("");
+    const direct = callers.filter((c) => !c.test);
+    const implementations = (node.implementations || []).map((id) => ({ id, where: id, name: id }));
+    const parts = [peopleList(tr("callers"), direct, direct.length <= 5), peopleList(tr("tests"), callers.filter((c) => c.test), false),
+      peopleList(tr("implementations"), implementations, implementations.length <= 5)].join("");
     if (parts) return `<footer>${parts}</footer>`;
     return `<footer>${node.callersComputed ? tr("noCallers") : tr("notComputed")}</footer>`;
   }
