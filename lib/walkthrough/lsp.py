@@ -43,6 +43,12 @@ def normalize_locations(result) -> List[Location]:
     return out
 
 
+TOKEN_TYPES = ["namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter",
+               "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword",
+               "modifier", "comment", "string", "number", "regexp", "operator", "decorator"]
+TOKEN_MODIFIERS = ["declaration", "definition", "readonly", "static", "deprecated", "abstract", "async",
+                   "modification", "documentation", "defaultLibrary"]
+
 CLIENT_CAPABILITIES = {
     "textDocument": {
         "documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
@@ -50,7 +56,7 @@ CLIENT_CAPABILITIES = {
         "definition": {"linkSupport": True},
         "implementation": {"linkSupport": True},
         "references": {},
-        "semanticTokens": {"requests": {"full": True}, "tokenTypes": [], "tokenModifiers": [],
+        "semanticTokens": {"requests": {"full": True}, "tokenTypes": TOKEN_TYPES, "tokenModifiers": TOKEN_MODIFIERS,
                            "formats": ["relative"]},
     },
     "workspace": {"configuration": True, "workspaceFolders": True},

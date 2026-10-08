@@ -21,6 +21,15 @@ def npm_global_root() -> str:
     return result.stdout.strip()
 
 
+@lru_cache(maxsize=None)
+def output_contains(command: tuple, expect: str) -> bool:
+    try:
+        result = subprocess.run(list(command), capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return expect in result.stdout + result.stderr
+
+
 def expand_placeholders(value):
     if isinstance(value, dict):
         return {key: expand_placeholders(item) for key, item in value.items()}
@@ -42,9 +51,15 @@ class Language:
     identifier_pattern: str
     implementation_pattern: Optional[str]
     initialization_options: Optional[dict]
+    check_command: Optional[tuple] = None
+    check_expect: Optional[str] = None
 
     def installed(self) -> bool:
-        return shutil.which(self.command[0]) is not None
+        if shutil.which(self.command[0]) is None:
+            return False
+        if not self.check_command:
+            return True
+        return output_contains(self.check_command, self.check_expect or "")
 
     def resolved_initialization_options(self) -> Optional[dict]:
         if self.initialization_options is None:
@@ -92,6 +107,8 @@ def load_config(path: Optional[Path] = None) -> Config:
             identifier_pattern=entry["identifierPattern"],
             implementation_pattern=entry.get("implementationPattern"),
             initialization_options=entry.get("initializationOptions"),
+            check_command=tuple(entry["check"]["command"]) if "check" in entry else None,
+            check_expect=entry["check"]["expect"] if "check" in entry else None,
         )
     return Config(
         languages=languages,

@@ -37,7 +37,7 @@ def external_package(uri: str) -> str:
     if "/stdlib/" in path and "typeshed" in path:
         return "stdlib"
     if "/node_modules/" in path:
-        rest = path.rsplit("/node_modules/", 1)[1].split("/")
+        rest = path.split("/node_modules/", 1)[1].split("/")
         return "/".join(rest[:2]) if rest[0].startswith("@") else rest[0]
     for marker in ("/site-packages/", "/dist-packages/"):
         if marker in path:
@@ -151,13 +151,25 @@ class Indexer:
                 symbols = self.call(rel, lambda server, path: server.document_symbols(path))
             except RootLost:
                 symbols = []
-            found = node_candidates(symbols)
+            found = [c for c in node_candidates(symbols) if not self.is_alias(rel, c)]
             assign_ids(rel, found)
             for candidate in found:
                 self.known[candidate.id] = candidate
                 self.path_by_id[candidate.id] = rel
             self.candidates_cache[rel] = found
         return self.candidates_cache[rel]
+
+    def is_alias(self, rel: str, candidate: Candidate) -> bool:
+        if candidate.kind_number not in (13, 14):
+            return False
+        try:
+            locations = self.call(rel, lambda s, p: s.definition(p, candidate.sel_line, candidate.sel_char))
+        except RootLost:
+            return False
+        if not locations:
+            return False
+        target = uri_to_path(locations[0].uri)
+        return target != (self.root / rel).resolve() or locations[0].line0 != candidate.sel_line
 
     def node_at(self, rel: str, line: int) -> Optional[Candidate]:
         return innermost(self.candidates(rel), line)

@@ -25,10 +25,10 @@
       "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
       "languageIds": {".ts": "typescript", ".tsx": "typescriptreact", ".js": "javascript", ".jsx": "javascriptreact", ".mjs": "javascript", ".cjs": "javascript"},
       "rootMarkers": ["tsconfig.json", "jsconfig.json", "package.json"],
-      "command": ["typescript-language-server", "--stdio"],
-      "install": "npm install -g typescript typescript-language-server",
-      "identifierPattern": "[A-Za-z_$][A-Za-z0-9_$]*",
-      "initializationOptions": {"tsserver": {"fallbackPath": "${npmGlobalRoot}/typescript/lib"}}
+      "command": ["tsc", "--lsp", "--stdio"],
+      "install": "npm install -g typescript@latest",
+      "check": {"command": ["tsc", "--lsp", "--help"], "expect": "Usage of lsp"},
+      "identifierPattern": "[A-Za-z_$][A-Za-z0-9_$]*"
     },
     "python": {
       "extensions": [".py"],

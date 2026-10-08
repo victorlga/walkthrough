@@ -1,7 +1,14 @@
 import unittest
 
 import helpers  # noqa: F401
-from walkthrough.config import load_config
+from walkthrough.config import Language, load_config
+
+
+def language_with_check(output):
+    return Language(name="fake", extensions=(".x",), root_markers=(), command=("python3",), install="",
+                    language_ids={}, identifier_pattern="x", implementation_pattern=None,
+                    initialization_options=None, check_command=("python3", "-c", f"print({output!r})"),
+                    check_expect="Usage of lsp")
 
 
 class ConfigTest(unittest.TestCase):
@@ -27,6 +34,10 @@ class ConfigTest(unittest.TestCase):
         for path in ["package-lock.json", "web/pnpm-lock.yaml", "dist/app.js", "a.min.js"]:
             self.assertTrue(self.config.is_generated(path), path)
         self.assertFalse(self.config.is_generated("src/build_order.ts"))
+
+    def test_a_server_binary_without_lsp_support_counts_as_missing(self):
+        self.assertFalse(language_with_check("Unknown compiler option '--lsp'").installed())
+        self.assertTrue(language_with_check("Usage of lsp:").installed())
 
 
 if __name__ == "__main__":
