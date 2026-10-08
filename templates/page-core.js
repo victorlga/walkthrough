@@ -7,7 +7,7 @@ const STRINGS = {
   pt: {
     overview: "Visão geral", back: "Voltar", roteiro: "roteiro", of: "de", story: "A história",
     route: "Roteiro", entryPoints: "Pontos de entrada afetados", otherChanges: "Outras mudanças",
-    hunks: "Trechos sem código", mechanical: "Mudanças mecânicas", divergences: "Glossário e código divergem",
+    mechanical: "Mudanças mecânicas", divergences: "Glossário e código divergem",
     changesSeen: "mudanças vistas", cameFrom: "veio de", line: "linha", callers: "Quem chama", tests: "Testes",
     implementations: "Implementações", change: "O que mudou", adds: "O que acrescenta", why: "Por quê",
     steps: "Passo a passo", risk: "Risco", relation: "Como se liga à mudança", syntax: "Sintaxe usada aqui", explain: "Explicar", stop: "Parar",
@@ -16,12 +16,12 @@ const STRINGS = {
     failed: "A resposta falhou. Tente de novo.", lostLinks: "Sem links em", pruned: "Explicações removidas por erro",
     trimmed: "Funções cortadas por tamanho", outside: "fora do índice", library: "biblioteca", noCallers: "Ninguém chama esta função no repo.",
     notComputed: "Quem chama não foi calculado nesta profundidade.", hunk: "Trecho", noChanges: "Nenhuma função mudou.",
-    chatPrompt: "explica {id} no walkthrough", fold: "Recolher ou abrir o bloco", lines: "linhas",
+    chatPrompt: "explica {id} no walkthrough", fold: "Recolher ou abrir o bloco", lines: "linhas", next: "Próximo", more: "mais",
   },
   en: {
     overview: "Overview", back: "Back", roteiro: "route", of: "of", story: "The story",
     route: "Reading route", entryPoints: "Affected entry points", otherChanges: "Other changes",
-    hunks: "Changes outside code", mechanical: "Mechanical changes", divergences: "Glossary and code disagree",
+    mechanical: "Mechanical changes", divergences: "Glossary and code disagree",
     changesSeen: "changes seen", cameFrom: "came from", line: "line", callers: "Called by", tests: "Tests",
     implementations: "Implementations", change: "What changed", adds: "What it adds", why: "Why",
     steps: "Step by step", risk: "Risk", relation: "How it connects to the change", syntax: "Syntax used here", explain: "Explain", stop: "Stop",
@@ -30,7 +30,7 @@ const STRINGS = {
     failed: "The answer failed. Try again.", lostLinks: "No links in", pruned: "Explanations removed after errors",
     trimmed: "Functions cut for size", outside: "outside the index", library: "library", noCallers: "Nothing in the repo calls this function.",
     notComputed: "Callers were not computed at this depth.", hunk: "Hunk", noChanges: "No function changed.",
-    chatPrompt: "explain {id} in the walkthrough", fold: "Fold or unfold the block", lines: "lines",
+    chatPrompt: "explain {id} in the walkthrough", fold: "Fold or unfold the block", lines: "lines", next: "Next", more: "more",
   },
 };
 
@@ -238,6 +238,50 @@ function hiddenRows(regions, folded) {
   return hidden;
 }
 
+const CALLABLE_KINDS = new Set(["function", "method", "constructor", "other", "toplevel"]);
+
+function entryLines(index, skeleton = []) {
+  const route = new Set(skeleton);
+  const rank = (id) => [route.has(id) ? 0 : 1, CALLABLE_KINDS.has(((index.nodes || {})[id] || {}).kind) ? 0 : 1, id];
+  const byRank = (a, b) => {
+    const [x, y] = [rank(a), rank(b)];
+    return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2]);
+  };
+  const reachedBy = new Map();
+  for (const [changedId, info] of Object.entries(index.impact || {})) {
+    for (const path of info.paths || []) {
+      const entry = path[path.length - 1];
+      const node = (index.nodes || {})[entry];
+      if (!node || node.test || !CALLABLE_KINDS.has(node.kind)) continue;
+      if (!reachedBy.has(entry)) reachedBy.set(entry, new Set());
+      reachedBy.get(entry).add(changedId);
+    }
+  }
+  return [...reachedBy].map(([id, reached]) => ({ id, reached: [...reached].sort(byRank) }))
+    .sort((a, b) => b.reached.length - a.reached.length || a.id.localeCompare(b.id));
+}
+
+function groupByFile(ids, pathOf) {
+  const groups = new Map();
+  for (const id of ids) {
+    const path = pathOf(id);
+    if (!groups.has(path)) groups.set(path, []);
+    groups.get(path).push(id);
+  }
+  return [...groups].sort((a, b) => a[0].localeCompare(b[0])).map(([path, members]) => ({ path, ids: members }));
+}
+
+function splitPath(path) {
+  const cut = path.lastIndexOf("/") + 1;
+  return { dir: path.slice(0, cut), file: path.slice(cut) };
+}
+
+function nextInRoute(plan, id) {
+  const route = ((plan && plan.parts) || []).flatMap((part) => part.roteiro || []);
+  const position = route.indexOf(id);
+  return position >= 0 && position + 1 < route.length ? route[position + 1] : null;
+}
+
 function pushEntry(stack, entry) {
   return stack.concat([entry]);
 }
@@ -363,7 +407,7 @@ function askTools(data) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STRINGS, t, parseMarkers, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
-    codeRows, lineSpans, lineSegments, foldRegions, defaultFolds, hiddenRows, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
+    codeRows, lineSpans, lineSegments, foldRegions, defaultFolds, hiddenRows, entryLines, groupByFile, splitPath, nextInRoute, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
     CORE_SECTION, contextBlock, explainPrompt, askTurns, askTools,
   };
 }

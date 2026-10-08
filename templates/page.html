@@ -50,8 +50,18 @@ main { padding-inline: 16px; padding-block: 1.25rem 4rem; }
 .item .name { font-family: var(--font-code); font-weight: 600; overflow-wrap: anywhere; }
 .item .path { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
 .item .summary { display: block; color: var(--muted); }
-.chain { font-family: var(--font-code); font-size: .82rem; overflow-x: auto; white-space: nowrap; padding: .3rem 0; border-top: 1px solid var(--rule); }
-.chain .sep { color: var(--muted); padding: 0 .3rem; }
+.entry { font-family: var(--font-code); font-size: .85rem; padding: .4rem .25rem; border-top: 1px solid var(--rule); overflow-wrap: anywhere; }
+.entry .path, .entry .reach { color: var(--muted); }
+details.file, details.more { border-top: 1px solid var(--rule); }
+details.file > summary, details.more > summary { padding: .5rem .25rem; font-family: var(--font-code); font-size: .85rem; overflow-wrap: anywhere; }
+details.file > summary b { color: var(--ink); font-weight: 600; }
+.count { color: var(--muted); font-variant-numeric: tabular-nums; }
+details.file .item { padding-left: 1.6rem; }
+.where .dir { color: var(--muted); }
+.where b { color: var(--ink); font-weight: 600; }
+.next { justify-self: start; margin-top: .5rem; padding: .45rem .9rem; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft);
+  color: var(--accent); cursor: pointer; font-size: .95rem; overflow-wrap: anywhere; text-align: left; }
+.next span { font-family: var(--font-code); font-weight: 600; }
 .warn { margin: 0; font-size: .85rem; color: var(--del-ink); }
 .view { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 1.5rem; align-items: start; }
 @media (max-width: 880px) { .view { grid-template-columns: minmax(0, 1fr); } }
@@ -226,24 +236,39 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       ? `${tr("roteiro")} ${counts.roteiroSeen} ${tr("of")} ${counts.roteiroTotal}` : "";
   }
 
-  function item(id) {
+  function item(id, showFile = true) {
     const node = nodes[id] || null;
     const hunk = hunks[id] || null;
     if (!node && !hunk) return "";
     const seen = visited.has(id);
     const summary = plain((entryFor(id) || {}).summary || "");
     const name = node ? node.name : tr("hunk");
-    const path = node ? `${node.path}:${node.lines[0]}` : hunk.path;
+    const path = node ? node.path : hunk.path;
+    const line = node ? node.lines[0] : (hunk.lines.find((l) => l.n) || {}).n;
+    const label = `${showFile ? splitPath(path).file : ""}${line ? `:${line}` : ""}`;
     return `<button type="button" class="item${seen ? " seen" : ""}" data-go="${escapeHtml(id)}">`
       + `<span class="mark" aria-hidden="true">${seen ? "✓" : "○"}</span>`
-      + `<span><span class="name">${escapeHtml(name)}</span> <span class="path">${escapeHtml(path)}</span>`
+      + `<span><span class="name">${escapeHtml(name)}</span> <span class="path" title="${escapeHtml(path)}">${escapeHtml(label)}</span>`
       + `<span class="summary">${escapeHtml(summary)}</span></span></button>`;
   }
 
-  function chain(path) {
-    return `<div class="chain">${path.slice().reverse().map((id) => nodes[id]
-      ? `<a class="ref" href="#" data-ref="${escapeHtml(id)}">${escapeHtml(nodes[id].name)}</a>` : escapeHtml(id))
-      .join('<span class="sep">›</span>')}</div>`;
+  function refLink(id) {
+    return `<a class="ref${visited.has(id) ? " seen" : ""}" href="#" data-ref="${escapeHtml(id)}">${escapeHtml(nodes[id].name)}</a>`;
+  }
+
+  function entryLine(entry) {
+    const node = nodes[entry.id];
+    const shown = entry.reached.slice(0, 3).map(refLink).join(", ");
+    const rest = entry.reached.length > 3 ? ` +${entry.reached.length - 3}` : "";
+    return `<div class="entry">${refLink(entry.id)} <span class="path" title="${escapeHtml(node.path)}">${escapeHtml(splitPath(node.path).file)}</span>`
+      + ` <span class="reach">→ ${shown}${rest}</span></div>`;
+  }
+
+  function fileGroup(group) {
+    const { dir, file } = splitPath(group.path);
+    const seen = group.ids.filter((id) => visited.has(id)).length;
+    return `<details class="file"><summary><span class="dir">${escapeHtml(dir)}</span><b>${escapeHtml(file)}</b>`
+      + ` <span class="count">${seen ? `${seen}/` : ""}${group.ids.length}</span></summary>${group.ids.map((id) => item(id, false)).join("")}</details>`;
   }
 
   function warnings() {
@@ -257,26 +282,21 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   function renderOverview() {
     const ctx = { nameIndex, nodes, lineRange: null, prefer: [changedSet] };
     const counts = progress(data, visited);
-    const parts = (plan.parts || []).map((part) => `<h3 class="part">${escapeHtml(part.title)}</h3>${part.roteiro.map(item).join("")}`).join("");
-    const chains = [];
-    const seenChains = new Set();
-    for (const info of Object.values(index.impact || {})) {
-      for (const path of info.paths) {
-        const key = path.join(">");
-        if (!seenChains.has(key)) { seenChains.add(key); chains.push(chain(path)); }
-      }
-    }
+    const parts = (plan.parts || []).map((part) => `<h3 class="part">${escapeHtml(part.title)}</h3>${part.roteiro.map((id) => item(id)).join("")}`).join("");
+    const entries = entryLines(index, plan.skeleton || []);
+    const entryHtml = entries.slice(0, 8).map(entryLine).join("")
+      + (entries.length > 8 ? `<details class="more"><summary>${tr("more")} ${entries.length - 8}</summary>${entries.slice(8).map(entryLine).join("")}</details>` : "");
     const divergences = (explanations.overview.glossaryDivergences || []).map((text) => renderMarkdown(text, ctx)).join("");
-    const other = (plan.other || []).map(item).join("");
-    const hunkItems = (index.hunks || []).map((hunk) => item(hunk.id)).join("");
+    const otherIds = (plan.other || []).concat((index.hunks || []).map((hunk) => hunk.id)).filter((id) => nodes[id] || hunks[id]);
+    const pathOf = (id) => (nodes[id] ? nodes[id].path : hunks[id].path);
+    const other = otherIds.length <= 12 ? otherIds.map((id) => item(id)).join("") : groupByFile(otherIds, pathOf).map(fileGroup).join("");
     const mechanical = plan.mechanical && plan.mechanical.summary;
     view.innerHTML = `<div class="overview">${warnings()}`
       + `<section><h2>${tr("story")}</h2>${renderMarkdown(explanations.overview.story, ctx)}</section>`
       + (divergences ? `<section><h2>${tr("divergences")}</h2>${divergences}</section>` : "")
       + (parts ? `<section><h2>${tr("route")}</h2>${parts}</section>` : `<p>${tr("noChanges")}</p>`)
-      + (chains.length ? `<section><h2>${tr("entryPoints")}</h2>${chains.join("")}</section>` : "")
+      + (entries.length ? `<section><h2>${tr("entryPoints")}</h2>${entryHtml}</section>` : "")
       + (other ? `<section><h2>${tr("otherChanges")}</h2>${other}</section>` : "")
-      + (hunkItems ? `<section><h2>${tr("hunks")}</h2>${hunkItems}</section>` : "")
       + (mechanical ? `<section><h2>${tr("mechanical")}</h2><p>${escapeHtml(mechanical)}</p></section>` : "")
       + `<p class="progress">${counts.changedSeen} ${tr("of")} ${counts.changedTotal} ${tr("changesSeen")}</p></div>`;
   }
@@ -374,13 +394,21 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     return `<footer>${node.callersComputed ? tr("noCallers") : tr("notComputed")}</footer>`;
   }
 
+  function whereHtml(path, line) {
+    const { dir, file } = splitPath(path);
+    return `<div class="where" title="${escapeHtml(path)}"><span class="dir">${escapeHtml(dir)}</span><b>${escapeHtml(file)}</b>${line ? `:${line}` : ""}</div>`;
+  }
+
   function renderNode(entry) {
     const node = nodes[entry.id];
     const ctx = { nameIndex, nodes, lineRange: node.lines, prefer: [neighborsOf(node), changedSet] };
     const from = entry.fromId && nodes[entry.fromId]
       ? `<div>${tr("cameFrom")} <a class="ref" href="#" data-back="1">${escapeHtml(nodes[entry.fromId].name)}</a>${entry.fromLine ? `, ${tr("line")} ${entry.fromLine}` : ""}</div>` : "";
-    view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}</article>`
-      + `<div class="side"><section class="code"><header>${from}<div class="where">${escapeHtml(node.path)}:${node.lines[0]}</div></header>`
+    const nextId = nextInRoute(plan, entry.id);
+    const next = nextId && nodes[nextId]
+      ? `<button type="button" class="next" id="next" data-next="${escapeHtml(nextId)}">${tr("next")}: <span>${escapeHtml(nodes[nextId].name)}</span> →</button>` : "";
+    view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}${next}</article>`
+      + `<div class="side"><section class="code"><header>${from}${whereHtml(node.path, node.lines[0])}</header>`
       + codeTable(codeRows(node), lineSpans(node), languageOf(node.path))
       + `${footerHtml(node)}</section><div class="ai" id="ai"></div></div></div>`;
     showFirstChange();
@@ -390,8 +418,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   function renderHunk(entry) {
     const hunk = hunks[entry.id];
     const summary = (entryFor(entry.id) || {}).summary || "";
-    view.innerHTML = `<div class="view"><article class="explain"><h1>${escapeHtml(hunk.path)}</h1><p class="lede">${escapeHtml(plain(summary))}</p></article>`
-      + `<section class="code"><header><div class="where">${escapeHtml(hunk.path)}</div></header>`
+    view.innerHTML = `<div class="view"><article class="explain"><h1>${escapeHtml(splitPath(hunk.path).file)}</h1><p class="lede">${escapeHtml(plain(summary))}</p></article>`
+      + `<section class="code"><header>${whereHtml(hunk.path, null)}</header>`
       + `${codeTable(hunk.lines, null, languageOf(hunk.path))}</section></div>`;
     showFirstChange();
   }
@@ -437,6 +465,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   document.addEventListener("click", (event) => {
     const jumpTarget = event.target.closest("[data-jump]");
     if (jumpTarget) { jump(Number(jumpTarget.dataset.jump)); return; }
+    const nextTarget = event.target.closest("[data-next]");
+    if (nextTarget) { app.stack = [{ id: null }, { id: nextTarget.dataset.next, fromId: null, fromLine: null }]; render(); return; }
     const goTarget = event.target.closest("[data-go]");
     if (goTarget) { go({ id: goTarget.dataset.go, fromId: null, fromLine: null }); return; }
     const backTarget = event.target.closest("[data-back]");
@@ -482,6 +512,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     if (event.key === "Backspace" || (event.ctrlKey && event.key.toLowerCase() === "o")) {
       event.preventDefault();
       back();
+    } else if (event.key === "n" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const next = document.getElementById("next");
+      if (next) next.click();
     } else if (event.key === "e" && !event.metaKey && !event.ctrlKey && !event.altKey) {
       const explain = document.getElementById("explain-button");
       if (explain && !explain.disabled) explain.click();

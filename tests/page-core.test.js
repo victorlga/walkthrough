@@ -150,3 +150,55 @@ test("short blocks and blocks with changes stay open", () => {
   const rows = rowsOf(["def f():", "    if x:", "        y()", "    for i in z:", "        w(i)", "        v(i)"], [5]);
   assert.strictEqual(core.defaultFolds(rows, core.foldRegions(rows)).size, 0);
 });
+
+test("entry points list each callable entry once with the changes it reaches", () => {
+  const index = {
+    nodes: {
+      "a.ts#handler": { name: "handler", kind: "function" },
+      "a.ts#CONFIG": { name: "CONFIG", kind: "variable" },
+      "a.ts#spec": { name: "spec", kind: "function", test: true },
+      "b.ts#calc": { name: "calc", kind: "function" },
+      "b.ts#fee": { name: "fee", kind: "function" },
+    },
+    impact: {
+      "b.ts#calc": { paths: [["b.ts#calc", "a.ts#handler"], ["b.ts#calc", "a.ts#CONFIG"], ["b.ts#calc", "a.ts#spec"]] },
+      "b.ts#fee": { paths: [["b.ts#fee", "b.ts#calc", "a.ts#handler"]] },
+    },
+  };
+  assert.deepStrictEqual(core.entryLines(index), [{ id: "a.ts#handler", reached: ["b.ts#calc", "b.ts#fee"] }]);
+});
+
+test("changes group by file in path order", () => {
+  const paths = { x: "src/b.ts", y: "src/a.ts", z: "src/b.ts" };
+  assert.deepStrictEqual(core.groupByFile(["x", "y", "z"], (id) => paths[id]),
+    [{ path: "src/a.ts", ids: ["y"] }, { path: "src/b.ts", ids: ["x", "z"] }]);
+});
+
+test("a path splits into its folder and its file name", () => {
+  assert.deepStrictEqual(core.splitPath("api/src/rules/registry.ts"), { dir: "api/src/rules/", file: "registry.ts" });
+  assert.deepStrictEqual(core.splitPath("README.md"), { dir: "", file: "README.md" });
+});
+
+test("the next step follows the roteiro across parts and ends at the last one", () => {
+  const plan = { parts: [{ roteiro: ["a", "b"] }, { roteiro: ["c"] }] };
+  assert.strictEqual(core.nextInRoute(plan, "b"), "c");
+  assert.strictEqual(core.nextInRoute(plan, "c"), null);
+  assert.strictEqual(core.nextInRoute(plan, "elsewhere"), null);
+});
+
+test("an entry point names the roteiro functions it reaches before constants", () => {
+  const index = {
+    nodes: {
+      "a.ts#main": { name: "main", kind: "function" },
+      "b.ts#ALPHA": { name: "ALPHA", kind: "variable" },
+      "b.ts#helper": { name: "helper", kind: "function" },
+      "b.ts#zeta": { name: "zeta", kind: "function" },
+    },
+    impact: {
+      "b.ts#ALPHA": { paths: [["b.ts#ALPHA", "a.ts#main"]] },
+      "b.ts#helper": { paths: [["b.ts#helper", "a.ts#main"]] },
+      "b.ts#zeta": { paths: [["b.ts#zeta", "a.ts#main"]] },
+    },
+  };
+  assert.deepStrictEqual(core.entryLines(index, ["b.ts#zeta"])[0].reached, ["b.ts#zeta", "b.ts#helper", "b.ts#ALPHA"]);
+});

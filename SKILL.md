@@ -67,7 +67,7 @@ Publish that file with `icon: "code"`, `capabilities: {"sample": {}}` and a one-
 
 Without the Artifact tool, use `--mode local --out RUN_DIR/walkthrough.html` and open the file with `open`.
 
-Report the link, the counts and every warning `render` printed: lost links, pruned explanations, cut functions.
+Report the link, the counts and every warning `render` printed: lost links, pruned explanations, cut functions. Tell the user the keys once: `n` goes to the next step of the roteiro, Backspace or Ctrl-O goes back, `e` asks for an explanation.
 
 ## 8. Clean up
 
