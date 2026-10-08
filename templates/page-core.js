@@ -206,9 +206,108 @@ function storageKey(meta) {
   return `walkthrough:v1:${meta.repo || "repo"}:${meta.slug || "head"}`;
 }
 
+const REQUIRED_SECTIONS = {
+  added: ["context", "why", "steps", "impact"],
+  modified: ["context", "before", "why", "steps", "impact"],
+  unchanged: ["context", "steps", "relation"],
+};
+const LANGUAGE_NAMES = { pt: "Portuguese", en: "English" };
+
+function summaryOf(data, id) {
+  const entry = (data.explanations.nodes || {})[id];
+  return entry && entry.summary ? entry.summary : "";
+}
+
+function pathLine(data, stack) {
+  const nodes = data.index.nodes;
+  return stack.slice(1).map((entry) => {
+    const node = nodes[entry.id];
+    const name = node ? node.name : entry.id;
+    if (entry.fromId && entry.fromLine && nodes[entry.fromId]) return `${name} (called at line ${entry.fromLine} of ${nodes[entry.fromId].name})`;
+    return name;
+  }).join(" > ");
+}
+
+function contextBlock({ data, id, stack }) {
+  const nodes = data.index.nodes;
+  const node = nodes[id];
+  const status = (node.change && node.change.status) || "unchanged";
+  const describe = (otherId) => `- ${nodes[otherId].name}: ${summaryOf(data, otherId) || nodes[otherId].path}`;
+  const calls = [...new Set((node.links || []).filter((l) => l.to && nodes[l.to]).map((l) => l.to))].map(describe);
+  const callers = (node.callers || []).filter((c) => nodes[c.from]).map((c) => describe(c.from) + (c.test ? " (test)" : ""));
+  return [
+    `Write in ${LANGUAGE_NAMES[data.lang] || "English"}.`,
+    `Story of the branch:\n${(data.explanations.overview || {}).story || "(none)"}`,
+    `How the reader got here: ${pathLine(data, stack) || node.name}`,
+    `Function ${id} (${node.kind}, ${status}) in ${node.path}, lines ${node.lines[0]}-${node.lines[1]}. Lines marked + were added, lines marked - were removed:`,
+    numberedSource(node),
+    `It calls:\n${calls.join("\n") || "(nothing in the index)"}`,
+    `Called by:\n${callers.join("\n") || "(nobody in the index)"}`,
+  ].join("\n\n");
+}
+
+function explainPrompt(ctx) {
+  const node = ctx.data.index.nodes[ctx.id];
+  const status = (node.change && node.change.status) || "unchanged";
+  const keys = REQUIRED_SECTIONS[status] || REQUIRED_SECTIONS.unchanged;
+  return [
+    "You explain code to a reviewer who is reading a walkthrough of a branch. Follow these rules exactly:",
+    ctx.data.rules || "",
+    contextBlock(ctx),
+    `Return only JSON shaped as {"summary": "one sentence starting with a verb", "sections": {...}}. The sections object must have exactly these keys: ${keys.map((k) => `"${k}"`).join(", ")}. You may add "syntax" for language constructs a newcomer would trip on.`,
+    `Mark lines of this function with [[L${node.lines[0]}]] or [[L${node.lines[0]}-${node.lines[0] + 1}]], staying between ${node.lines[0]} and ${node.lines[1]}. Mark other functions with [[name]], using only names listed above. Every numbered step in "steps" needs a line marker.`,
+  ].join("\n\n");
+}
+
+function askTurns(ctx, history, question) {
+  const intro = [
+    "You answer questions from a reviewer who is reading a walkthrough of a branch. Follow these rules for markers and tone:",
+    ctx.data.rules || "",
+    contextBlock(ctx),
+    "Answer in short paragraphs. Use [[Lnn]] markers for lines of this function and [[name]] for other functions. You may call the tools to read other functions of the index. Say plainly when something is not in the code you can see.",
+  ].join("\n\n");
+  return [{ role: "user", content: intro }, ...history, { role: "user", content: question }];
+}
+
+function askTools(data) {
+  const nodes = data.index.nodes;
+  const need = (id) => {
+    const node = nodes[String(id)];
+    if (!node) throw new Error(`${id} is not in the index`);
+    return node;
+  };
+  return [
+    {
+      name: "read_function",
+      description: "Returns one function of the walkthrough index by id: path, line range, numbered source with + and - diff marks, and its summary when there is one.",
+      inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      execute: ({ id }) => {
+        const node = need(id);
+        return { id: String(id), path: node.path, lines: node.lines, summary: summaryOf(data, String(id)), source: numberedSource(node).slice(0, 8000) };
+      },
+    },
+    {
+      name: "find_function",
+      description: "Finds function ids in the walkthrough index whose name or id contains the given text. Returns at most 20 ids.",
+      inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
+      execute: ({ name }) => {
+        const query = String(name);
+        return Object.keys(nodes).filter((id) => nodes[id].name === query || id.includes(query)).sort().slice(0, 20);
+      },
+    },
+    {
+      name: "callers_of",
+      description: "Lists the functions that call the given function id, with the call lines and whether the caller is a test.",
+      inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      execute: ({ id }) => (need(id).callers || []).map((c) => ({ id: c.from, lines: c.lines, test: c.test })),
+    },
+  ];
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STRINGS, t, parseMarkers, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
     codeRows, lineSpans, lineSegments, pushEntry, popTo, popOne, progress, numberedSource, storageKey,
+    REQUIRED_SECTIONS, contextBlock, explainPrompt, askTurns, askTools,
   };
 }

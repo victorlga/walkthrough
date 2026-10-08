@@ -418,3 +418,119 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   render();
 })();
 </script>
+<script>
+(function () {
+  "use strict";
+  const app = window.walkthroughApp;
+  const localSetup = app.setupAi;
+  const permanent = new Set(["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"]);
+  const threads = {};
+  let sample = null;
+  let toolsAllowed = false;
+  let running = null;
+
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("sample").then((fn) => {
+      if (!fn) return null;
+      sample = fn;
+      return fn.limits().then((limits) => { toolsAllowed = Boolean(limits && limits.tools); }, () => null).then(() => app.render());
+    }).catch(() => null);
+  }
+
+  function messageFor(error) {
+    return error && error.code === "rate_limited" ? app.tr("rateLimited") : app.tr("failed");
+  }
+
+  function handleFailure(error, status) {
+    if (error && error.code === "cancelled") { status.textContent = ""; return; }
+    if (error && permanent.has(error.code)) { sample = null; app.render(); return; }
+    status.textContent = messageFor(error);
+  }
+
+  function start(controls) {
+    running = new AbortController();
+    controls.stop.hidden = false;
+    controls.status.textContent = app.tr("thinking");
+    if (controls.explain) controls.explain.disabled = true;
+    controls.send.disabled = true;
+    return running.signal;
+  }
+
+  function finish(controls) {
+    running = null;
+    controls.stop.hidden = true;
+    if (controls.explain) controls.explain.disabled = false;
+    controls.send.disabled = false;
+  }
+
+  app.setupAi = function setupAi(id) {
+    if (!sample) { localSetup(id); return; }
+    const entry = app.entryFor(id);
+    const needsExplain = !entry || entry.level !== "full";
+    const ai = document.getElementById("ai");
+    ai.innerHTML = '<div class="row">'
+      + (needsExplain ? `<button type="button" class="primary" id="explain-button">${app.tr("explain")}</button>` : "")
+      + `<button type="button" class="secondary" id="stop-button" hidden>${app.tr("stop")}</button>`
+      + '<span id="ai-status" class="progress" role="status"></span></div>'
+      + '<div id="thread"></div>'
+      + `<label for="question">${app.tr("ask")}</label><textarea id="question"></textarea>`
+      + `<div class="row"><button type="button" class="secondary" id="ask-button">${app.tr("send")}</button></div>`;
+    const controls = { explain: document.getElementById("explain-button"), stop: document.getElementById("stop-button"),
+      status: document.getElementById("ai-status"), send: document.getElementById("ask-button") };
+    const ctx = { nameIndex: app.nameIndex, nodes: app.nodes, lineRange: app.nodes[id].lines };
+    const thread = document.getElementById("thread");
+    const history = threads[id] || (threads[id] = []);
+    for (const turn of history) {
+      const bubble = document.createElement("div");
+      bubble.className = turn.role === "user" ? "answer question" : "answer";
+      bubble.innerHTML = renderMarkdown(turn.content, ctx);
+      thread.append(bubble);
+    }
+    controls.stop.addEventListener("click", () => { if (running) running.abort(); });
+
+    if (controls.explain) {
+      controls.explain.addEventListener("click", () => {
+        const signal = start(controls);
+        const prompt = explainPrompt({ data: app.data, id, stack: app.stack });
+        sample.json(prompt, { signal, modelTier: "default", cache: { gcTime: 86400000 } }).then((result) => {
+          if (!result || typeof result.summary !== "string" || !result.sections || typeof result.sections !== "object") {
+            throw { code: "invalid_json" };
+          }
+          app.generated[id] = { level: "full", summary: result.summary, sections: result.sections };
+          app.store.set("generated", app.generated);
+          finish(controls);
+          if (app.top().id === id) app.render();
+        }).catch((error) => { finish(controls); handleFailure(error, controls.status); });
+      });
+    }
+
+    controls.send.addEventListener("click", () => {
+      const box = document.getElementById("question");
+      const question = box.value.trim();
+      if (!question) return;
+      box.value = "";
+      const asked = document.createElement("div");
+      asked.className = "answer question";
+      asked.textContent = question;
+      const answer = document.createElement("div");
+      answer.className = "answer";
+      answer.textContent = app.tr("thinking");
+      thread.append(asked, answer);
+      const signal = start(controls);
+      const options = { signal, onText: ({ text }) => { answer.innerHTML = renderMarkdown(text, ctx); } };
+      if (toolsAllowed) options.tools = askTools(app.data);
+      else options.cache = false;
+      sample(askTurns({ data: app.data, id, stack: app.stack }, history.slice(-8), question), options).then(({ text }) => {
+        history.push({ role: "user", content: question }, { role: "assistant", content: text });
+        answer.innerHTML = renderMarkdown(text, ctx);
+        finish(controls);
+        controls.status.textContent = "";
+      }).catch((error) => {
+        finish(controls);
+        answer.innerHTML = error && error.text ? renderMarkdown(error.text, ctx) : "";
+        handleFailure(error, controls.status);
+      });
+    });
+  };
+})();
+</script>

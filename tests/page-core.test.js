@@ -67,3 +67,42 @@ test("progress counts the roteiro and every change", () => {
   const data = { plan: { skeleton: ["a", "b"] }, index: { changed: ["a", "b", "c"] } };
   assert.deepStrictEqual(core.progress(data, new Set(["a", "c"])), { roteiroSeen: 1, roteiroTotal: 2, changedSeen: 2, changedTotal: 3 });
 });
+
+const askData = {
+  lang: "pt",
+  rules: "REGRAS DO FORMATO",
+  index: { nodes: {
+    "a.py#calc": { ...nodes["a.py#calc"], path: "a.py", kind: "function", callers: [{ from: "a.py#handler", path: "a.py", line: 20, lines: [21], test: false }] },
+    "a.py#handler": { ...nodes["a.py#handler"], path: "a.py", kind: "function", source: "def handler():\n    return calc(1)\n", change: { status: "unchanged", added: [], removed: [] }, links: [], external: [], callers: [] },
+    "b.py#handler": { ...nodes["b.py#handler"], path: "b.py", kind: "function", source: "def handler():\n    pass\n", change: { status: "unchanged", added: [], removed: [] }, links: [], external: [], callers: [] },
+  } },
+  explanations: { overview: { story: "A história da branch." }, nodes: { "a.py#handler": { level: "summary", summary: "Recebe a chamada." } } },
+};
+const askStack = [{ id: null }, { id: "a.py#handler", fromId: null, fromLine: null }, { id: "a.py#calc", fromId: "a.py#handler", fromLine: 21 }];
+
+test("the explain prompt carries the rules, the path, the diff and the required sections", () => {
+  const prompt = core.explainPrompt({ data: askData, id: "a.py#calc", stack: askStack });
+  assert.ok(prompt.includes("REGRAS DO FORMATO"));
+  assert.ok(prompt.includes("Portuguese"));
+  assert.ok(prompt.includes("handler > calc (called at line 21 of handler)"));
+  assert.ok(prompt.includes("  12 +     return x + y"));
+  assert.ok(prompt.includes('"context", "before", "why", "steps", "impact"'));
+  assert.ok(prompt.includes("handler: Recebe a chamada."));
+});
+
+test("ask turns start with the context and end with the question", () => {
+  const turns = core.askTurns({ data: askData, id: "a.py#calc", stack: askStack },
+    [{ role: "user", content: "antes?" }, { role: "assistant", content: "sim" }], "por que y?");
+  assert.strictEqual(turns[0].role, "user");
+  assert.ok(turns[0].content.includes("A história da branch."));
+  assert.deepStrictEqual(turns.slice(1).map((turn) => turn.role), ["user", "assistant", "user"]);
+  assert.strictEqual(turns[turns.length - 1].content, "por que y?");
+});
+
+test("ask tools read and find functions from the index only", () => {
+  const tools = Object.fromEntries(core.askTools(askData).map((tool) => [tool.name, tool]));
+  assert.deepStrictEqual(tools.find_function.execute({ name: "handler" }), ["a.py#handler", "b.py#handler"]);
+  assert.ok(tools.read_function.execute({ id: "a.py#calc" }).source.includes("  12 +     return x + y"));
+  assert.deepStrictEqual(tools.callers_of.execute({ id: "a.py#calc" }), [{ id: "a.py#handler", lines: [21], test: false }]);
+  assert.throws(() => tools.read_function.execute({ id: "nope" }), /not in the index/);
+});
