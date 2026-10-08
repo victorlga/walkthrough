@@ -2,6 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from unittest import mock
+
 from helpers import git, init_repo
 from walkthrough import gitops
 
@@ -60,6 +62,17 @@ class GitopsTest(unittest.TestCase):
         self.assertIn("no common history", str(error.exception))
         self.assertIn("--base", str(error.exception))
         self.assertFalse((self.run_dir / "worktree").exists())
+
+    def test_a_pr_whose_base_branch_was_deleted_uses_the_base_commit(self):
+        head = git(self.repo, "rev-parse", "other").strip()
+        main = git(self.repo, "rev-parse", "main").strip()
+        git(self.repo, "push", "origin", f"{head}:refs/pull/7/head")
+        pr = {"headRefOid": head, "baseRefName": "deleted-base", "baseRefOid": main, "title": "Stacked", "body": ""}
+        with mock.patch.object(gitops, "gh_json", lambda repo, *args: pr):
+            target = gitops.resolve_target(self.repo, "7", None, self.run_dir)
+        self.assertEqual(target.base_sha, main)
+        self.assertIn("return 2", (target.root / "app.py").read_text())
+        gitops.remove_worktree(self.repo, target.worktree)
 
     def test_a_linked_worktree_is_named_after_its_main_repo(self):
         linked = self.run_dir.parent / "some-worktree-name"

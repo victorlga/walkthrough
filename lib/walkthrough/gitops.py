@@ -119,11 +119,18 @@ def resolve_target(repo: Path, target: Optional[str], base: Optional[str], run_d
                       worktree=None, pr=pr["number"] if pr else None)
     if target.isdigit():
         number = int(target)
-        pr = gh_json(repo, "pr", "view", target, "--json", "headRefOid,baseRefName,title,body")
+        pr = gh_json(repo, "pr", "view", target, "--json", "headRefOid,baseRefName,baseRefOid,title,body")
         if pr is None:
             raise GitError(f"gh could not read PR {number}. Check `gh auth status` and the PR number.")
-        run_git(repo, "fetch", "origin", f"pull/{number}/head", pr["baseRefName"])
-        base_sha = merge_base(repo, base or f"origin/{pr['baseRefName']}", pr["headRefOid"])
+        run_git(repo, "fetch", "origin", f"pull/{number}/head")
+        if base is None:
+            run_git(repo, "fetch", "origin", pr["baseRefName"], check=False)
+            if run_git(repo, "rev-parse", "--verify", "--quiet", f"origin/{pr['baseRefName']}", check=False).strip():
+                base = f"origin/{pr['baseRefName']}"
+        if base is None:
+            run_git(repo, "fetch", "origin", pr["baseRefOid"], check=False)
+            base = pr["baseRefOid"]
+        base_sha = merge_base(repo, base, pr["headRefOid"])
         worktree = add_worktree(repo, run_dir, pr["headRefOid"])
         return Target(root=worktree, base_sha=base_sha, label=f"PR {number}", title=pr["title"],
                       body=pr["body"] or "", slug=f"pr-{number}", worktree=worktree, pr=number)
