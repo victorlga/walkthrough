@@ -4,7 +4,7 @@ from pathlib import Path
 
 from helpers import git, init_repo
 from walkthrough.config import load_config
-from walkthrough.indexer import block_around, build_index
+from walkthrough.indexer import block_around, build_index, merge_adjacent_links
 from walkthrough.symbols import Candidate, include_leading_comments
 
 
@@ -25,6 +25,16 @@ class LeadingCommentsTest(unittest.TestCase):
         found = [candidate("a", 1, 4), candidate("b", 6, 6)]
         include_leading_comments(found, lines, (";",))
         self.assertEqual([c.start for c in found], [1, 5])
+
+
+class MergeLinksTest(unittest.TestCase):
+    def test_a_qualified_name_split_in_tokens_becomes_one_link(self):
+        links = [{"line": 31, "col": 40, "len": 8, "to": "e.clj#Tier"}, {"line": 31, "col": 48, "len": 1, "to": "e.clj#Tier"},
+                 {"line": 31, "col": 49, "len": 4, "to": "e.clj#Tier"}, {"line": 31, "col": 55, "len": 3, "to": "e.clj#Tier"},
+                 {"line": 32, "col": 0, "len": 3, "path": "x.clj", "targetLine": 4}]
+        self.assertEqual(merge_adjacent_links(links), [
+            {"line": 31, "col": 40, "len": 13, "to": "e.clj#Tier"}, {"line": 31, "col": 55, "len": 3, "to": "e.clj#Tier"},
+            {"line": 32, "col": 0, "len": 3, "path": "x.clj", "targetLine": 4}])
 
 
 class BlockAroundTest(unittest.TestCase):

@@ -73,6 +73,18 @@ def block_around(text: List[str], first: int, last: int, margin: int = 20, limit
     return start, end
 
 
+def merge_adjacent_links(links: List[dict]) -> List[dict]:
+    merged: List[dict] = []
+    target = lambda link: (link.get("to"), link.get("path"), link.get("targetLine"))
+    for link in links:
+        last = merged[-1] if merged else None
+        if last and last["line"] == link["line"] and last["col"] + last["len"] == link["col"] and target(last) == target(link):
+            last["len"] += link["len"]
+        else:
+            merged.append(dict(link))
+    return merged
+
+
 def split_lines(text: str) -> List[str]:
     lines = text.split("\n")
     if lines and lines[-1] == "":
@@ -388,6 +400,7 @@ class Indexer:
                 continue
             node["links"].append({**span, "to": target.id})
             targets.append(target)
+        node["links"] = merge_adjacent_links(node["links"])
         return targets
 
     def compute_callers(self, node_id: str) -> List[Candidate]:
