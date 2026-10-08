@@ -36,14 +36,15 @@ Write `RUN_DIR/fragments/overview.json` as `{"overview": {"story": "...", "gloss
 Dispatch subagents in one message, so they run at once:
 
 - one per skeleton function, level `full`;
-- batches of about ten for the `summary` of every function in `other`, and of every hunk;
+- batches of about 40 for the `summary` of every function in `other` and of every hunk, with the ids in a file, one per line. One line per function is cheap, so these batches may run on a faster model;
 - in a small PR, batches of about ten for `short` explanations of direct neighbors and tests.
 
 Give each subagent this prompt, filled in:
 
 ```
-Write walkthrough explanations for: <ids>, level <level>, in <language>.
-For each id, run `<W> context <RUN_DIR> <id>` and read <skill dir>/references/explanation-format.md.
+Write walkthrough explanations for: <ids, or "every id listed in <file>">, level <level>, in <language>.
+For each id with "#", run `<W> context <RUN_DIR> '<id>'` (quoted: ids can hold parentheses) and read <skill dir>/references/explanation-format.md.
+Ids with "@" are hunks: read them with `git -C <meta.root> diff <meta.base> -- <path before the @>`. Hunk summaries have no line markers.
 You may read files under <meta.root> and run git log there. Glossary: <glossary paths>.
 Write {"nodes": {"<id>": {...}}} to <RUN_DIR>/fragments/<batch>.json. Reply with the path only.
 ```
