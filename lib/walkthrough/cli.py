@@ -13,6 +13,7 @@ from walkthrough import explanations as explanations_store
 from walkthrough import gitops
 from walkthrough.config import load_config
 from walkthrough.indexer import Caps, build_index
+from walkthrough.render import render
 from walkthrough.validate import prune, validate
 
 GLOSSARY_NAMES = ("CONTEXT.md", "GLOSSARY.md")
@@ -256,6 +257,24 @@ def cmd_validate(args) -> int:
     return 1 if problems else 0
 
 
+def cmd_render(args) -> int:
+    run_dir = Path(args.run_dir)
+    result = render(run_dir, Path(args.out), args.mode, args.lang)
+    index, _ = load_run(run_dir)
+    data = explanations_store.load(run_dir)
+    print(result["path"])
+    print(f"{result['bytes'] / 1_000_000:.1f} MB")
+    for lost in index["lostLinks"]:
+        print(f"warning: no links for {lost['language']} at {lost['root']}: {lost['reason']}")
+    for entry in data["pruned"]:
+        print(f"warning: explanation removed for {entry['id']}: {entry['reason']}")
+    if result["trimmed"]:
+        print(f"warning: {result['trimmed']} distant functions were cut to fit the page")
+    if index["truncated"]["maxNodesHit"]:
+        print("warning: the index hit --max-nodes; some links show only file and line")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="walkthrough")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -301,6 +320,13 @@ def build_parser() -> argparse.ArgumentParser:
     validate_cmd.add_argument("--max-skeleton", type=int, default=12)
     validate_cmd.add_argument("--prune", action="store_true")
     validate_cmd.set_defaults(func=cmd_validate)
+
+    render_cmd = sub.add_parser("render", help="build the page")
+    render_cmd.add_argument("run_dir")
+    render_cmd.add_argument("--out", required=True)
+    render_cmd.add_argument("--mode", choices=["artifact", "local"], default="artifact")
+    render_cmd.add_argument("--lang", default="pt")
+    render_cmd.set_defaults(func=cmd_render)
     return parser
 
 

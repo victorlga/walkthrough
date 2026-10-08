@@ -1,0 +1,420 @@
+<title>__TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: sticky trail bar. The overview is one reading column. A function shows its explanation beside a code panel that scrolls on its own, stacked on narrow screens. */
+:root {
+  --paper: #f5f4ef; --panel: #fffefb; --ink: #1c232c; --muted: #5b6574; --rule: #dcd8cd;
+  --accent: #2a5b8c; --accent-soft: #e2ebf4; --add: #e5f2e3; --add-ink: #24692f; --del: #f8e6e2; --del-ink: #9a2f20; --hl: #fbefc2;
+  --tok-keyword: #6f3f99; --tok-string: #2c6b3c; --tok-comment: #7a8390; --tok-number: #9a5226; --tok-name: #1d4c78;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #161a20; --panel: #1d222a; --ink: #e3e6ea; --muted: #9aa3b0; --rule: #2d343e;
+    --accent: #8db6e6; --accent-soft: #22324a; --add: #1b3223; --add-ink: #8fd09d; --del: #3a2120; --del-ink: #f0a294; --hl: #3a3417;
+    --tok-keyword: #c6a2e6; --tok-string: #9ed2a7; --tok-comment: #7e8896; --tok-number: #e2a878; --tok-name: #9bc3ed;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #161a20; --panel: #1d222a; --ink: #e3e6ea; --muted: #9aa3b0; --rule: #2d343e;
+  --accent: #8db6e6; --accent-soft: #22324a; --add: #1b3223; --add-ink: #8fd09d; --del: #3a2120; --del-ink: #f0a294; --hl: #3a3417;
+  --tok-keyword: #c6a2e6; --tok-string: #9ed2a7; --tok-comment: #7e8896; --tok-number: #e2a878; --tok-name: #9bc3ed;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--font-body); }
+button { font: inherit; color: inherit; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; display: flex; align-items: center; gap: .75rem;
+  padding-inline: 16px; padding-block: .55rem; background: var(--paper); border-bottom: 1px solid var(--rule); }
+.bar #back { border: 1px solid var(--rule); background: var(--panel); border-radius: 4px; padding: .1rem .55rem; cursor: pointer; }
+.bar #back:disabled { opacity: .4; cursor: default; }
+.trail { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem; flex: 1; min-width: 0; font-size: .9rem; }
+.trail button { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-family: var(--font-code); font-size: .85rem; }
+.trail span[aria-current] { font-family: var(--font-code); font-size: .85rem; font-weight: 600; overflow-wrap: anywhere; }
+.trail .sep { color: var(--muted); }
+.progress { font: .8rem var(--font-code); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+main { padding-inline: 16px; padding-block: 1.25rem 4rem; }
+.overview { max-width: 46rem; margin: 0 auto; display: grid; gap: 2rem; }
+.overview h2, .explain h3 { margin: 0 0 .5rem; font-size: .75rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.overview h3.part { margin: 1rem 0 .25rem; font-size: 1rem; }
+.overview p { margin: 0 0 .75rem; max-width: 65ch; }
+.item { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); gap: .5rem; width: 100%; padding: .55rem .25rem;
+  text-align: left; background: none; border: 0; border-top: 1px solid var(--rule); cursor: pointer; }
+.item:hover { background: var(--accent-soft); }
+.item .mark { color: var(--muted); font-family: var(--font-code); }
+.item.seen .mark { color: var(--add-ink); }
+.item .name { font-family: var(--font-code); font-weight: 600; overflow-wrap: anywhere; }
+.item .path { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.item .summary { display: block; color: var(--muted); }
+.chain { font-family: var(--font-code); font-size: .82rem; overflow-x: auto; white-space: nowrap; padding: .3rem 0; border-top: 1px solid var(--rule); }
+.chain .sep { color: var(--muted); padding: 0 .3rem; }
+.warn { margin: 0; font-size: .85rem; color: var(--del-ink); }
+.view { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 1.5rem; align-items: start; }
+@media (max-width: 880px) { .view { grid-template-columns: minmax(0, 1fr); } }
+.explain { display: grid; gap: 1.1rem; min-width: 0; }
+.explain h1 { margin: 0; font: 600 1.35rem/1.3 var(--font-code); overflow-wrap: anywhere; text-wrap: balance; }
+.explain .lede { margin: 0; font-size: 1.05rem; }
+.explain p, .explain li { max-width: 65ch; }
+.explain ol, .explain ul { margin: 0; padding-left: 1.3rem; display: grid; gap: .35rem; }
+.explain li[data-lines] { border-radius: 3px; padding: 0 .2rem; }
+.explain li[data-lines]:hover { background: var(--hl); }
+.explain code, .overview code { font: .88em var(--font-code); background: var(--accent-soft); padding: 0 .2rem; border-radius: 2px; }
+.chip { font: .72rem var(--font-code); padding: 0 .35rem; margin: 0 .1rem; border: 1px solid var(--accent); color: var(--accent);
+  background: var(--accent-soft); border-radius: 3px; cursor: pointer; }
+a.ref, a.sym { color: var(--accent); text-decoration: none; border-bottom: 1px dotted currentColor; }
+a.ref.seen, a.sym.seen { color: var(--muted); }
+.ext { border-bottom: 1px dashed var(--rule); }
+.frontier { border-bottom: 1px dashed var(--muted); }
+details summary { cursor: pointer; color: var(--muted); }
+.code { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 3.3rem); display: flex; flex-direction: column; min-width: 0;
+  max-height: calc(100vh - 4.6rem); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+@media (max-width: 880px) { .code { position: static; max-height: 70vh; } }
+.code > header, .code > footer { padding: .55rem .8rem; font-size: .85rem; color: var(--muted); }
+.code > header { border-bottom: 1px solid var(--rule); }
+.code > footer { border-top: 1px solid var(--rule); display: grid; gap: .45rem; }
+.code .where { font-family: var(--font-code); overflow-wrap: anywhere; }
+.code .scroll { overflow: auto; flex: 1; }
+.list { display: flex; flex-wrap: wrap; gap: .3rem .9rem; }
+.list strong { color: var(--ink); font-weight: 600; }
+table.src { border-collapse: collapse; font: .84rem/1.55 var(--font-code); width: max-content; min-width: 100%; }
+table.src td { padding: 0 .55rem; white-space: pre; vertical-align: top; }
+td.n { color: var(--muted); text-align: right; user-select: none; font-variant-numeric: tabular-nums; }
+td.m { color: var(--muted); user-select: none; padding: 0 .1rem; }
+tr.add { background: var(--add); } tr.add td.m { color: var(--add-ink); }
+tr.del { background: var(--del); } tr.del td.m, tr.del td.c { color: var(--del-ink); }
+tr.hl, tr.add.hl, tr.del.hl { background: var(--hl); }
+.hljs-keyword, .hljs-built_in, .hljs-literal, .hljs-meta { color: var(--tok-keyword); }
+.hljs-string, .hljs-regexp { color: var(--tok-string); }
+.hljs-comment, .hljs-quote { color: var(--tok-comment); font-style: italic; }
+.hljs-number, .hljs-symbol { color: var(--tok-number); }
+.hljs-title, .hljs-name, .hljs-attr, .hljs-type, .hljs-params { color: var(--tok-name); }
+.ai { display: grid; gap: .6rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.ai textarea { width: 100%; min-height: 4.5rem; padding: .5rem; font: inherit; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 4px; }
+.ai .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.primary { background: var(--accent); color: var(--paper); border: 0; padding: .4rem .9rem; border-radius: 4px; cursor: pointer; }
+.secondary { background: none; border: 1px solid var(--rule); padding: .35rem .8rem; border-radius: 4px; cursor: pointer; }
+.answer { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: .6rem .8rem; }
+.answer.question { background: var(--accent-soft); }
+.copybox { margin: 0; padding: .5rem; font: .8rem var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; user-select: all; }
+button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<header class="bar">
+  <button id="back" type="button">←</button>
+  <nav id="trail" class="trail"></nav>
+  <span id="progress" class="progress"></span>
+</header>
+<main id="view"></main>
+<script id="walkthrough-data" type="application/json">__WALKTHROUGH_DATA__</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/clojure.min.js"></script>
+<script>__PAGE_CORE__</script>
+<script>
+(function () {
+  "use strict";
+  const data = JSON.parse(document.getElementById("walkthrough-data").textContent);
+  const index = data.index;
+  const nodes = index.nodes;
+  const plan = data.plan;
+  const explanations = data.explanations;
+  const lang = data.lang || "en";
+  const tr = (key) => t(lang, key);
+  const nameIndex = buildNameIndex(nodes);
+  const hunks = Object.fromEntries((index.hunks || []).map((hunk) => [hunk.id, hunk]));
+  const prefix = storageKey(index.meta);
+  const store = {
+    get(key, fallback) {
+      try { const value = localStorage.getItem(`${prefix}:${key}`); return value ? JSON.parse(value) : fallback; } catch (error) { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(`${prefix}:${key}`, JSON.stringify(value)); } catch (error) { return; }
+    },
+  };
+  const visited = new Set(store.get("visited", []));
+  const generated = store.get("generated", {});
+  const view = document.getElementById("view");
+  const app = { stack: [{ id: null }], pinned: null, render: null, generated, store, tr, nodes, explanations, nameIndex, data };
+  window.walkthroughApp = app;
+
+  const plain = (text) => parseMarkers(text).map((s) => (s.type === "text" ? s.value : s.type === "ref" ? s.target : "")).join("");
+  const top = () => app.stack[app.stack.length - 1];
+  const entryFor = (id) => {
+    const written = explanations.nodes[id];
+    if (written && written.level === "full") return written;
+    return generated[id] || written || null;
+  };
+  app.entryFor = entryFor;
+  app.top = top;
+  const languageOf = (path) => ({ ".clj": "clojure", ".cljs": "clojure", ".cljc": "clojure", ".py": "python", ".ts": "typescript",
+    ".tsx": "typescript", ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript" })[(path.match(/\.[^.\/]+$/) || [""])[0]];
+
+  function highlight(text, language) {
+    if (window.hljs && language && window.hljs.getLanguage(language)) {
+      return window.hljs.highlight(text, { language, ignoreIllegals: true }).value;
+    }
+    return escapeHtml(text);
+  }
+
+  function go(entry) { app.stack = pushEntry(app.stack, entry); render(); }
+  function back() { app.stack = popOne(app.stack); render(); }
+  function jump(position) { app.stack = popTo(app.stack, position); render(); }
+
+  function render() {
+    const current = top();
+    app.pinned = null;
+    if (current.id && nodes[current.id]) {
+      visited.add(current.id);
+      store.set("visited", [...visited]);
+    }
+    renderTrail();
+    renderProgress();
+    if (!current.id) renderOverview();
+    else if (nodes[current.id]) renderNode(current);
+    else if (hunks[current.id]) renderHunk(current);
+    window.scrollTo(0, 0);
+  }
+  app.render = render;
+
+  function labelOf(entry) {
+    if (!entry.id) return tr("overview");
+    if (nodes[entry.id]) return nodes[entry.id].name;
+    return hunks[entry.id] ? hunks[entry.id].path : entry.id;
+  }
+
+  function renderTrail() {
+    document.getElementById("trail").innerHTML = app.stack.map((entry, position) => {
+      const separator = position ? '<span class="sep" aria-hidden="true">›</span>' : "";
+      const label = escapeHtml(labelOf(entry));
+      if (position === app.stack.length - 1) return `${separator}<span aria-current="page">${label}</span>`;
+      return `${separator}<button type="button" data-jump="${position}">${label}</button>`;
+    }).join("");
+    const backButton = document.getElementById("back");
+    backButton.disabled = app.stack.length === 1;
+    backButton.setAttribute("aria-label", tr("back"));
+  }
+
+  function renderProgress() {
+    const counts = progress(data, visited);
+    document.getElementById("progress").textContent = counts.roteiroTotal
+      ? `${tr("roteiro")} ${counts.roteiroSeen} ${tr("of")} ${counts.roteiroTotal}` : "";
+  }
+
+  function item(id) {
+    const node = nodes[id] || null;
+    const hunk = hunks[id] || null;
+    if (!node && !hunk) return "";
+    const seen = visited.has(id);
+    const summary = plain((entryFor(id) || {}).summary || "");
+    const name = node ? node.name : tr("hunk");
+    const path = node ? `${node.path}:${node.lines[0]}` : hunk.path;
+    return `<button type="button" class="item${seen ? " seen" : ""}" data-go="${escapeHtml(id)}">`
+      + `<span class="mark" aria-hidden="true">${seen ? "✓" : "○"}</span>`
+      + `<span><span class="name">${escapeHtml(name)}</span> <span class="path">${escapeHtml(path)}</span>`
+      + `<span class="summary">${escapeHtml(summary)}</span></span></button>`;
+  }
+
+  function chain(path) {
+    return `<div class="chain">${path.slice().reverse().map((id) => nodes[id]
+      ? `<a class="ref" href="#" data-ref="${escapeHtml(id)}">${escapeHtml(nodes[id].name)}</a>` : escapeHtml(id))
+      .join('<span class="sep">›</span>')}</div>`;
+  }
+
+  function warnings() {
+    const lines = [];
+    for (const lost of index.lostLinks || []) lines.push(`${tr("lostLinks")} ${lost.root} (${lost.language}): ${lost.reason}`);
+    if ((explanations.pruned || []).length) lines.push(`${tr("pruned")}: ${explanations.pruned.map((p) => p.id).join(", ")}`);
+    if ((index.truncated || {}).trimmedForSize) lines.push(`${tr("trimmed")}: ${index.truncated.trimmedForSize}`);
+    return lines.map((line) => `<p class="warn">${escapeHtml(line)}</p>`).join("");
+  }
+
+  function renderOverview() {
+    const ctx = { nameIndex, nodes, lineRange: null };
+    const counts = progress(data, visited);
+    const parts = (plan.parts || []).map((part) => `<h3 class="part">${escapeHtml(part.title)}</h3>${part.roteiro.map(item).join("")}`).join("");
+    const chains = [];
+    const seenChains = new Set();
+    for (const info of Object.values(index.impact || {})) {
+      for (const path of info.paths) {
+        const key = path.join(">");
+        if (!seenChains.has(key)) { seenChains.add(key); chains.push(chain(path)); }
+      }
+    }
+    const divergences = (explanations.overview.glossaryDivergences || []).map((text) => renderMarkdown(text, ctx)).join("");
+    const other = (plan.other || []).map(item).join("");
+    const hunkItems = (index.hunks || []).map((hunk) => item(hunk.id)).join("");
+    const mechanical = plan.mechanical && plan.mechanical.summary;
+    view.innerHTML = `<div class="overview">${warnings()}`
+      + `<section><h2>${tr("story")}</h2>${renderMarkdown(explanations.overview.story, ctx)}</section>`
+      + (divergences ? `<section><h2>${tr("divergences")}</h2>${divergences}</section>` : "")
+      + (parts ? `<section><h2>${tr("route")}</h2>${parts}</section>` : `<p>${tr("noChanges")}</p>`)
+      + (chains.length ? `<section><h2>${tr("entryPoints")}</h2>${chains.join("")}</section>` : "")
+      + (other ? `<section><h2>${tr("otherChanges")}</h2>${other}</section>` : "")
+      + (hunkItems ? `<section><h2>${tr("hunks")}</h2>${hunkItems}</section>` : "")
+      + (mechanical ? `<section><h2>${tr("mechanical")}</h2><p>${escapeHtml(mechanical)}</p></section>` : "")
+      + `<p class="progress">${counts.changedSeen} ${tr("of")} ${counts.changedTotal} ${tr("changesSeen")}</p></div>`;
+  }
+
+  function explanationHtml(node, entry, ctx) {
+    const title = `<h1>${escapeHtml(node.name)}</h1>`;
+    if (!entry) return title;
+    const status = node.change ? node.change.status : "unchanged";
+    const titles = { context: tr("context"), before: tr("before"), why: status === "added" ? tr("whyExists") : tr("whyChanged"),
+      steps: tr("steps"), impact: status === "added" ? tr("usedBy") : tr("impact"), relation: tr("relation") };
+    const sections = entry.sections || {};
+    const body = ["context", "before", "why", "steps", "impact", "relation"].filter((key) => sections[key])
+      .map((key) => `<section><h3>${titles[key]}</h3>${renderMarkdown(sections[key], ctx)}</section>`).join("");
+    const syntax = sections.syntax ? `<details><summary>${tr("syntax")}</summary>${renderMarkdown(sections.syntax, ctx)}</details>` : "";
+    return `${title}<p class="lede">${renderInline(entry.summary || "", ctx)}</p>${body}${syntax}`;
+  }
+  app.explanationHtml = explanationHtml;
+
+  function segmentHtml(segment, language, line) {
+    const text = highlight(segment.text, language);
+    const span = segment.span;
+    if (!span) return text;
+    if (span.to && nodes[span.to]) {
+      const target = nodes[span.to];
+      const summary = plain((entryFor(span.to) || {}).summary || "");
+      const tip = `${summary ? summary + " · " : ""}${target.path}:${target.lines[0]}`;
+      return `<a class="sym${visited.has(span.to) ? " seen" : ""}" href="#" data-ref="${escapeHtml(span.to)}" data-line="${line}" title="${escapeHtml(tip)}">${text}</a>`;
+    }
+    if (span.package) return `<span class="ext" title="${escapeHtml(`${tr("library")}: ${span.package}`)}">${text}</span>`;
+    const where = span.path ? `${span.path}:${span.targetLine}` : span.to;
+    return `<span class="frontier" title="${escapeHtml(`${where} · ${tr("outside")}`)}">${text}</span>`;
+  }
+
+  function rowsHtml(rows, spans, language) {
+    const marks = { add: "+", del: "−", ctx: "" };
+    return rows.map((row) => {
+      const content = row.kind === "del" || !spans ? highlight(row.text, language)
+        : lineSegments(row.text, spans.get(row.n)).map((segment) => segmentHtml(segment, language, row.n)).join("");
+      return `<tr class="${row.kind}"${row.n ? ` data-n="${row.n}"` : ""}><td class="n">${row.n || ""}</td>`
+        + `<td class="m">${marks[row.kind]}</td><td class="c">${content}</td></tr>`;
+    }).join("");
+  }
+
+  function peopleList(label, ids) {
+    if (!ids.length) return "";
+    return `<div class="list"><strong>${label}</strong>${ids.map((entry) => nodes[entry.id]
+      ? `<a class="ref${visited.has(entry.id) ? " seen" : ""}" href="#" data-ref="${escapeHtml(entry.id)}">${escapeHtml(nodes[entry.id].name)}</a>`
+      : `<span class="frontier" title="${escapeHtml(entry.where)}">${escapeHtml(entry.name)}</span>`).join("")}</div>`;
+  }
+
+  function footerHtml(node) {
+    const callers = (node.callers || []).map((c) => ({ id: c.from, where: `${c.path}:${c.line}`, name: c.from.split(/[#@]/).pop(), test: c.test }));
+    const parts = [peopleList(tr("callers"), callers.filter((c) => !c.test)), peopleList(tr("tests"), callers.filter((c) => c.test)),
+      peopleList(tr("implementations"), (node.implementations || []).map((id) => ({ id, where: id, name: id })))].join("");
+    if (parts) return `<footer>${parts}</footer>`;
+    return `<footer>${node.callersComputed ? tr("noCallers") : tr("notComputed")}</footer>`;
+  }
+
+  function renderNode(entry) {
+    const node = nodes[entry.id];
+    const ctx = { nameIndex, nodes, lineRange: node.lines };
+    const from = entry.fromId && nodes[entry.fromId]
+      ? `<div>${tr("cameFrom")} <a class="ref" href="#" data-back="1">${escapeHtml(nodes[entry.fromId].name)}</a>${entry.fromLine ? `, ${tr("line")} ${entry.fromLine}` : ""}</div>` : "";
+    view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}</article>`
+      + `<section class="code"><header>${from}<div class="where">${escapeHtml(node.path)}:${node.lines[0]}</div></header>`
+      + `<div class="scroll"><table class="src"><tbody>${rowsHtml(codeRows(node), lineSpans(node), languageOf(node.path))}</tbody></table></div>`
+      + `${footerHtml(node)}</section></div>`;
+    const ai = document.createElement("div");
+    ai.className = "ai";
+    ai.id = "ai";
+    document.getElementById("explain").append(ai);
+    app.setupAi(entry.id);
+  }
+
+  function renderHunk(entry) {
+    const hunk = hunks[entry.id];
+    const summary = (entryFor(entry.id) || {}).summary || "";
+    view.innerHTML = `<div class="view"><article class="explain"><h1>${escapeHtml(hunk.path)}</h1><p class="lede">${escapeHtml(plain(summary))}</p></article>`
+      + `<section class="code"><header><div class="where">${escapeHtml(hunk.path)}</div></header>`
+      + `<div class="scroll"><table class="src"><tbody>${rowsHtml(hunk.lines, null, languageOf(hunk.path))}</tbody></table></div></section></div>`;
+  }
+
+  function highlightLines(spec) {
+    view.querySelectorAll("tr.hl").forEach((row) => row.classList.remove("hl"));
+    let first = null;
+    for (const range of String(spec || "").split(",").filter(Boolean)) {
+      const [start, end] = range.split("-").map(Number);
+      for (let n = start; n <= end; n += 1) {
+        const row = view.querySelector(`tr[data-n="${n}"]`);
+        if (row) { row.classList.add("hl"); first = first || row; }
+      }
+    }
+    return first;
+  }
+
+  function copyText(button, text, fallbackElement) {
+    const done = () => { button.textContent = tr("copied"); };
+    const select = () => {
+      const range = document.createRange();
+      range.selectNodeContents(fallbackElement);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select);
+    else select();
+  }
+  app.copyText = copyText;
+
+  app.setupAi = function setupLocal(id) {
+    const entry = entryFor(id);
+    if (entry && entry.level === "full") return;
+    const prompt = tr("chatPrompt").replace("{id}", id);
+    const ai = document.getElementById("ai");
+    ai.innerHTML = `<p>${tr("askInChat")}</p><pre class="copybox" id="copy-text">${escapeHtml(prompt)}</pre>`
+      + `<div class="row"><button type="button" class="secondary" id="copy">${tr("copy")}</button></div>`;
+    document.getElementById("copy").addEventListener("click", (event) => copyText(event.currentTarget, prompt, document.getElementById("copy-text")));
+  };
+
+  document.addEventListener("click", (event) => {
+    const jumpTarget = event.target.closest("[data-jump]");
+    if (jumpTarget) { jump(Number(jumpTarget.dataset.jump)); return; }
+    const goTarget = event.target.closest("[data-go]");
+    if (goTarget) { go({ id: goTarget.dataset.go, fromId: null, fromLine: null }); return; }
+    const backTarget = event.target.closest("[data-back]");
+    if (backTarget) { event.preventDefault(); back(); return; }
+    const refTarget = event.target.closest("[data-ref]");
+    if (refTarget) {
+      event.preventDefault();
+      go({ id: refTarget.dataset.ref, fromId: top().id, fromLine: refTarget.dataset.line ? Number(refTarget.dataset.line) : null });
+      return;
+    }
+    const chip = event.target.closest(".chip");
+    if (chip) {
+      app.pinned = app.pinned === chip.dataset.lines ? null : chip.dataset.lines;
+      const first = highlightLines(app.pinned);
+      const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (first) first.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
+    }
+  });
+  document.getElementById("back").addEventListener("click", back);
+  view.addEventListener("mouseover", (event) => {
+    const step = event.target.closest("li[data-lines]");
+    if (step) highlightLines(step.dataset.lines);
+  });
+  view.addEventListener("mouseout", (event) => {
+    const step = event.target.closest("li[data-lines]");
+    if (step && !step.contains(event.relatedTarget)) highlightLines(app.pinned);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.target.closest("input, textarea, [contenteditable]")) return;
+    if (event.key === "Backspace" || (event.ctrlKey && event.key.toLowerCase() === "o")) {
+      event.preventDefault();
+      back();
+    } else if (event.key === "e" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const explain = document.getElementById("explain-button");
+      if (explain && !explain.disabled) explain.click();
+    }
+  });
+  render();
+})();
+</script>
