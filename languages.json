@@ -1,0 +1,42 @@
+{
+  "testPathPatterns": [
+    "(^|/)(test|tests|__tests__)/",
+    "\\.(spec|test)\\.[^/]+$",
+    "_test\\.[^/]+$",
+    "(^|/)test_[^/]+\\.py$"
+  ],
+  "generatedPathPatterns": [
+    "(^|/)(package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|poetry\\.lock|Pipfile\\.lock|Cargo\\.lock|Gemfile\\.lock|composer\\.lock|uv\\.lock)$",
+    "(^|/)(dist|build|out|\\.next|node_modules|vendor|__pycache__)/",
+    "\\.min\\.(js|css)$",
+    "\\.map$"
+  ],
+  "languages": {
+    "clojure": {
+      "extensions": [".clj", ".cljs", ".cljc"],
+      "languageIds": {".clj": "clojure", ".cljs": "clojure", ".cljc": "clojure"},
+      "rootMarkers": ["deps.edn", "project.clj", "shadow-cljs.edn", "bb.edn"],
+      "command": ["clojure-lsp"],
+      "install": "brew install clojure-lsp/brew/clojure-lsp-native",
+      "identifierPattern": "[A-Za-z*+!_?<>=][A-Za-z0-9*+!_?<>=.\\-/']*",
+      "implementationPattern": "^\\s*\\((defmulti|defprotocol)\\s"
+    },
+    "typescript": {
+      "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+      "languageIds": {".ts": "typescript", ".tsx": "typescriptreact", ".js": "javascript", ".jsx": "javascriptreact", ".mjs": "javascript", ".cjs": "javascript"},
+      "rootMarkers": ["tsconfig.json", "jsconfig.json", "package.json"],
+      "command": ["typescript-language-server", "--stdio"],
+      "install": "npm install -g typescript typescript-language-server",
+      "identifierPattern": "[A-Za-z_$][A-Za-z0-9_$]*",
+      "initializationOptions": {"tsserver": {"fallbackPath": "${npmGlobalRoot}/typescript/lib"}}
+    },
+    "python": {
+      "extensions": [".py"],
+      "languageIds": {".py": "python"},
+      "rootMarkers": ["pyproject.toml", "setup.cfg", "setup.py", "requirements.txt"],
+      "command": ["basedpyright-langserver", "--stdio"],
+      "install": "npm install -g basedpyright",
+      "identifierPattern": "[A-Za-z_][A-Za-z0-9_]*"
+    }
+  }
+}
