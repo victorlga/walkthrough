@@ -83,17 +83,14 @@ details summary { cursor: pointer; color: var(--muted); }
 .explain details > summary { font-size: .75rem; letter-spacing: .09em; text-transform: uppercase; }
 .explain details[open] > summary { margin-bottom: .5rem; }
 .explain section.risk { border-left: 3px solid var(--del-ink); padding-left: .75rem; }
-.side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 3.3rem); display: flex; flex-direction: column; gap: .75rem;
-  min-width: 0; max-height: calc(100vh - 4.6rem); }
-@media (max-width: 880px) { .side { position: static; max-height: none; } }
+.side { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
 .code { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 0 1 auto;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
-@media (max-width: 880px) { .code { max-height: 70vh; } }
 .code > header, .code > footer { padding: .55rem .8rem; font-size: .85rem; color: var(--muted); }
 .code > header { border-bottom: 1px solid var(--rule); }
 .code > footer { border-top: 1px solid var(--rule); display: grid; gap: .45rem; }
 .code .where { font-family: var(--font-code); overflow-wrap: anywhere; }
-.code .scroll { overflow: auto; flex: 1; position: relative; }
+.code .scroll { overflow: auto; max-height: 75vh; position: relative; }
 .list { display: flex; flex-wrap: wrap; gap: .3rem .9rem; }
 .people > summary { color: var(--ink); font-weight: 600; }
 .people .count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
@@ -368,7 +365,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     applyFolds();
     const scroll = view.querySelector(".code .scroll");
     const first = scroll && scroll.querySelector("tr.add:not([hidden]), tr.del:not([hidden])");
-    if (first && first.offsetTop > scroll.clientHeight * 0.6) scroll.scrollTop = Math.max(0, first.offsetTop - scroll.clientHeight / 3);
+    if (first && first.offsetTop + first.offsetHeight > scroll.clientHeight) scroll.scrollTop = Math.max(0, first.offsetTop - scroll.clientHeight / 3);
   }
 
   function peopleList(label, ids, open) {
@@ -406,8 +403,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       + `<div class="side"><section class="code"><header>${from}${whereHtml(node.path, node.lines[0])}</header>`
       + codeTable(codeRows(node), lineSpans(node), languageOf(node.path))
       + `${footerHtml(node)}</section><div class="ai" id="ai"></div></div></div>`;
-    showFirstChange();
     app.setupAi(entry.id);
+    showFirstChange();
   }
 
   function renderHunk(entry) {
