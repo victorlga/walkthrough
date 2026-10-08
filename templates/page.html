@@ -70,9 +70,12 @@ a.ref.seen, a.sym.seen { color: var(--muted); }
 .ext { border-bottom: 1px dashed var(--rule); }
 .frontier { border-bottom: 1px dashed var(--muted); }
 details summary { cursor: pointer; color: var(--muted); }
-.code { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 3.3rem); display: flex; flex-direction: column; min-width: 0;
-  max-height: calc(100vh - 4.6rem); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
-@media (max-width: 880px) { .code { position: static; max-height: 70vh; } }
+.side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 3.3rem); display: flex; flex-direction: column; gap: .75rem;
+  min-width: 0; max-height: calc(100vh - 4.6rem); }
+@media (max-width: 880px) { .side { position: static; max-height: none; } }
+.code { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 0 1 auto;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+@media (max-width: 880px) { .code { max-height: 70vh; } }
 .code > header, .code > footer { padding: .55rem .8rem; font-size: .85rem; color: var(--muted); }
 .code > header { border-bottom: 1px solid var(--rule); }
 .code > footer { border-top: 1px solid var(--rule); display: grid; gap: .45rem; }
@@ -92,7 +95,10 @@ tr.hl, tr.add.hl, tr.del.hl { background: var(--hl); }
 .hljs-comment, .hljs-quote { color: var(--tok-comment); font-style: italic; }
 .hljs-number, .hljs-symbol { color: var(--tok-number); }
 .hljs-title, .hljs-name, .hljs-attr, .hljs-type, .hljs-params { color: var(--tok-name); }
-.ai { display: grid; gap: .6rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.ai { flex: 0 0 auto; display: grid; gap: .6rem; max-height: 45vh; overflow: auto; padding: .7rem .8rem;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+.ai:empty { display: none; }
+.ai label { font-size: .85rem; color: var(--muted); }
 .ai textarea { width: 100%; min-height: 4.5rem; padding: .5rem; font: inherit; color: var(--ink); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 4px; }
 .ai .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
@@ -321,13 +327,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const from = entry.fromId && nodes[entry.fromId]
       ? `<div>${tr("cameFrom")} <a class="ref" href="#" data-back="1">${escapeHtml(nodes[entry.fromId].name)}</a>${entry.fromLine ? `, ${tr("line")} ${entry.fromLine}` : ""}</div>` : "";
     view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}</article>`
-      + `<section class="code"><header>${from}<div class="where">${escapeHtml(node.path)}:${node.lines[0]}</div></header>`
+      + `<div class="side"><section class="code"><header>${from}<div class="where">${escapeHtml(node.path)}:${node.lines[0]}</div></header>`
       + `<div class="scroll"><table class="src"><tbody>${rowsHtml(codeRows(node), lineSpans(node), languageOf(node.path))}</tbody></table></div>`
-      + `${footerHtml(node)}</section></div>`;
-    const ai = document.createElement("div");
-    ai.className = "ai";
-    ai.id = "ai";
-    document.getElementById("explain").append(ai);
+      + `${footerHtml(node)}</section><div class="ai" id="ai"></div></div></div>`;
     app.setupAi(entry.id);
   }
 
