@@ -30,8 +30,6 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 va
 button { font: inherit; color: inherit; }
 .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; display: flex; align-items: center; gap: .75rem;
   padding-inline: 16px; padding-block: .55rem; background: var(--paper); border-bottom: 1px solid var(--rule); }
-.bar #back { border: 1px solid var(--rule); background: var(--panel); border-radius: 4px; padding: .1rem .55rem; cursor: pointer; }
-.bar #back:disabled { opacity: .4; cursor: default; }
 .trail { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem; flex: 1; min-width: 0; font-size: .9rem; }
 .trail button { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-family: var(--font-code); font-size: .85rem; overflow-wrap: anywhere; min-width: 0; text-align: left; }
 .trail span[aria-current] { font-family: var(--font-code); font-size: .85rem; font-weight: 600; overflow-wrap: anywhere; }
@@ -136,7 +134,6 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 <header class="bar">
-  <button id="back" type="button">←</button>
   <nav id="trail" class="trail"></nav>
   <span id="progress" class="progress"></span>
 </header>
@@ -226,9 +223,6 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       if (position === app.stack.length - 1) return `${separator}<span aria-current="page">${label}</span>`;
       return `${separator}<button type="button" data-jump="${position}">${label}</button>`;
     }).join("");
-    const backButton = document.getElementById("back");
-    backButton.disabled = app.stack.length === 1;
-    backButton.setAttribute("aria-label", tr("back"));
   }
 
   function renderProgress() {
@@ -494,7 +488,6 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       if (first) first.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
     }
   });
-  document.getElementById("back").addEventListener("click", back);
   view.addEventListener("toggle", (event) => {
     const key = event.target.dataset && event.target.dataset.section;
     if (!key) return;

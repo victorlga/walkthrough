@@ -5,7 +5,7 @@ const LINE_MARKER = /^L(\d+)(?:-L?(\d+))?$/;
 
 const STRINGS = {
   pt: {
-    overview: "Visão geral", back: "Voltar", roteiro: "roteiro", of: "de", story: "A história",
+    overview: "Visão geral", roteiro: "roteiro", of: "de", story: "A história",
     route: "Roteiro", entryPoints: "Pontos de entrada afetados", otherChanges: "Outras mudanças",
     mechanical: "Mudanças mecânicas", divergences: "Glossário e código divergem",
     changesSeen: "mudanças vistas", cameFrom: "veio de", line: "linha", callers: "Quem chama", tests: "Testes",
@@ -19,7 +19,7 @@ const STRINGS = {
     chatPrompt: "explica {id} no walkthrough", fold: "Recolher ou abrir o bloco", lines: "linhas", next: "Próximo", more: "mais",
   },
   en: {
-    overview: "Overview", back: "Back", roteiro: "route", of: "of", story: "The story",
+    overview: "Overview", roteiro: "route", of: "of", story: "The story",
     route: "Reading route", entryPoints: "Affected entry points", otherChanges: "Other changes",
     mechanical: "Mechanical changes", divergences: "Glossary and code disagree",
     changesSeen: "changes seen", cameFrom: "came from", line: "line", callers: "Called by", tests: "Tests",
