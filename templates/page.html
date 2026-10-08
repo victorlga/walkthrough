@@ -84,13 +84,20 @@ details summary { cursor: pointer; color: var(--muted); }
 .code > header { border-bottom: 1px solid var(--rule); }
 .code > footer { border-top: 1px solid var(--rule); display: grid; gap: .45rem; }
 .code .where { font-family: var(--font-code); overflow-wrap: anywhere; }
-.code .scroll { overflow: auto; flex: 1; }
+.code .scroll { overflow: auto; flex: 1; position: relative; }
 .list { display: flex; flex-wrap: wrap; gap: .3rem .9rem; }
 .list strong { color: var(--ink); font-weight: 600; }
 table.src { border-collapse: collapse; font: .84rem/1.55 var(--font-code); width: max-content; min-width: 100%; }
 table.src td { padding: 0 .55rem; white-space: pre; vertical-align: top; }
 td.n { color: var(--muted); text-align: right; user-select: none; font-variant-numeric: tabular-nums; }
 td.m { color: var(--muted); user-select: none; padding: 0 .1rem; }
+table.src td.f { width: 1rem; padding: 0; user-select: none; }
+button.fold { display: block; width: 1rem; padding: 0; border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; line-height: inherit; opacity: 0; }
+button.fold::before { content: "▾"; }
+button.fold.closed::before { content: "▸"; }
+table.src:hover button.fold, button.fold.closed, button.fold:focus-visible { opacity: 1; }
+@media (hover: none) { button.fold { opacity: 1; } }
+.fold-pill { margin-left: .6rem; padding: 0 .45rem; font: .72rem var(--font-body); color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 3px; cursor: pointer; }
 tr.add { background: var(--add); } tr.add td.m { color: var(--add-ink); }
 tr.del { background: var(--del); } tr.del td.m, tr.del td.c { color: var(--del-ink); }
 tr.hl, tr.add.hl, tr.del.hl { background: var(--hl); }
@@ -179,6 +186,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   function render() {
     const current = top();
     app.pinned = null;
+    app.fold = null;
     if (current.id && nodes[current.id]) {
       visited.add(current.id);
       store.set("visited", [...visited]);
@@ -303,14 +311,47 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     return `<span class="frontier" title="${escapeHtml(`${where} · ${tr("outside")}`)}">${text}</span>`;
   }
 
-  function rowsHtml(rows, spans, language) {
+  function rowsHtml(rows, spans, language, regions) {
     const marks = { add: "+", del: "−", ctx: "" };
-    return rows.map((row) => {
+    const sizes = new Map((regions || []).map((region) => [region.start, region.end - region.start]));
+    return rows.map((row, i) => {
       const content = row.kind === "del" || !spans ? highlight(row.text, language)
         : lineSegments(row.text, spans.get(row.n)).map((segment) => segmentHtml(segment, language, row.n)).join("");
-      return `<tr class="${row.kind}"${row.n ? ` data-n="${row.n}"` : ""}><td class="n">${row.n || ""}</td>`
-        + `<td class="m">${marks[row.kind]}</td><td class="c">${content}</td></tr>`;
+      const fold = sizes.has(i) ? `<button type="button" class="fold" data-fold="${i}" aria-expanded="true" aria-label="${tr("fold")}"></button>` : "";
+      const pill = sizes.has(i) ? `<button type="button" class="fold-pill" data-fold="${i}" hidden>⋯ ${sizes.get(i)} ${tr("lines")}</button>` : "";
+      return `<tr class="${row.kind}" data-i="${i}"${row.n ? ` data-n="${row.n}"` : ""}><td class="n">${row.n || ""}</td>`
+        + `<td class="f">${fold}</td><td class="m">${marks[row.kind]}</td><td class="c">${content}${pill}</td></tr>`;
     }).join("");
+  }
+
+  function codeTable(rows, spans, language) {
+    const regions = foldRegions(rows);
+    app.fold = { regions, folded: defaultFolds(rows, regions) };
+    return `<div class="scroll"><table class="src"><tbody>${rowsHtml(rows, spans, language, regions)}</tbody></table></div>`;
+  }
+
+  function applyFolds() {
+    if (!app.fold) return;
+    const hidden = hiddenRows(app.fold.regions, app.fold.folded);
+    view.querySelectorAll("table.src tr[data-i]").forEach((row) => { row.hidden = hidden.has(Number(row.dataset.i)); });
+    view.querySelectorAll("table.src [data-fold]").forEach((button) => {
+      const closed = app.fold.folded.has(Number(button.dataset.fold));
+      if (button.classList.contains("fold-pill")) button.hidden = !closed;
+      else { button.classList.toggle("closed", closed); button.setAttribute("aria-expanded", String(!closed)); }
+    });
+  }
+
+  function unfoldRow(index) {
+    if (!app.fold) return;
+    for (const region of app.fold.regions) if (region.start < index && index <= region.end) app.fold.folded.delete(region.start);
+    applyFolds();
+  }
+
+  function showFirstChange() {
+    applyFolds();
+    const scroll = view.querySelector(".code .scroll");
+    const first = scroll && scroll.querySelector("tr.add:not([hidden]), tr.del:not([hidden])");
+    if (first && first.offsetTop > scroll.clientHeight * 0.6) scroll.scrollTop = Math.max(0, first.offsetTop - scroll.clientHeight / 3);
   }
 
   function peopleList(label, ids) {
@@ -335,8 +376,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       ? `<div>${tr("cameFrom")} <a class="ref" href="#" data-back="1">${escapeHtml(nodes[entry.fromId].name)}</a>${entry.fromLine ? `, ${tr("line")} ${entry.fromLine}` : ""}</div>` : "";
     view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}</article>`
       + `<div class="side"><section class="code"><header>${from}<div class="where">${escapeHtml(node.path)}:${node.lines[0]}</div></header>`
-      + `<div class="scroll"><table class="src"><tbody>${rowsHtml(codeRows(node), lineSpans(node), languageOf(node.path))}</tbody></table></div>`
+      + codeTable(codeRows(node), lineSpans(node), languageOf(node.path))
       + `${footerHtml(node)}</section><div class="ai" id="ai"></div></div></div>`;
+    showFirstChange();
     app.setupAi(entry.id);
   }
 
@@ -345,7 +387,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const summary = (entryFor(entry.id) || {}).summary || "";
     view.innerHTML = `<div class="view"><article class="explain"><h1>${escapeHtml(hunk.path)}</h1><p class="lede">${escapeHtml(plain(summary))}</p></article>`
       + `<section class="code"><header><div class="where">${escapeHtml(hunk.path)}</div></header>`
-      + `<div class="scroll"><table class="src"><tbody>${rowsHtml(hunk.lines, null, languageOf(hunk.path))}</tbody></table></div></section></div>`;
+      + `${codeTable(hunk.lines, null, languageOf(hunk.path))}</section></div>`;
+    showFirstChange();
   }
 
   function highlightLines(spec) {
@@ -355,6 +398,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       const [start, end] = range.split("-").map(Number);
       for (let n = start; n <= end; n += 1) {
         const row = view.querySelector(`tr[data-n="${n}"]`);
+        if (row && row.hidden) unfoldRow(Number(row.dataset.i));
         if (row) { row.classList.add("hl"); first = first || row; }
       }
     }
@@ -396,6 +440,14 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     if (refTarget) {
       event.preventDefault();
       go({ id: refTarget.dataset.ref, fromId: top().id, fromLine: refTarget.dataset.line ? Number(refTarget.dataset.line) : null });
+      return;
+    }
+    const foldTarget = event.target.closest("[data-fold]");
+    if (foldTarget && app.fold) {
+      const start = Number(foldTarget.dataset.fold);
+      if (app.fold.folded.has(start)) app.fold.folded.delete(start);
+      else app.fold.folded.add(start);
+      applyFolds();
       return;
     }
     const chip = event.target.closest(".chip");

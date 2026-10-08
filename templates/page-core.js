@@ -16,7 +16,7 @@ const STRINGS = {
     failed: "A resposta falhou. Tente de novo.", lostLinks: "Sem links em", pruned: "Explicações removidas por erro",
     trimmed: "Funções cortadas por tamanho", outside: "fora do índice", library: "biblioteca", noCallers: "Ninguém chama esta função no repo.",
     notComputed: "Quem chama não foi calculado nesta profundidade.", hunk: "Trecho", noChanges: "Nenhuma função mudou.",
-    chatPrompt: "explica {id} no walkthrough",
+    chatPrompt: "explica {id} no walkthrough", fold: "Recolher ou abrir o bloco", lines: "linhas",
   },
   en: {
     overview: "Overview", back: "Back", roteiro: "route", of: "of", story: "The story",
@@ -30,7 +30,7 @@ const STRINGS = {
     failed: "The answer failed. Try again.", lostLinks: "No links in", pruned: "Explanations removed after errors",
     trimmed: "Functions cut for size", outside: "outside the index", library: "library", noCallers: "Nothing in the repo calls this function.",
     notComputed: "Callers were not computed at this depth.", hunk: "Hunk", noChanges: "No function changed.",
-    chatPrompt: "explain {id} in the walkthrough",
+    chatPrompt: "explain {id} in the walkthrough", fold: "Fold or unfold the block", lines: "lines",
   },
 };
 
@@ -190,6 +190,54 @@ function lineSegments(text, spans) {
   return segments;
 }
 
+function indentOf(text) {
+  return /^[ \t]*/.exec(text)[0].replace(/\t/g, "    ").length;
+}
+
+function foldRegions(rows) {
+  const blank = (i) => !String(rows[i].text).trim();
+  const regions = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    if (blank(i)) continue;
+    const base = indentOf(rows[i].text);
+    let next = i + 1;
+    while (next < rows.length && blank(next)) next += 1;
+    if (next >= rows.length || indentOf(rows[next].text) <= base) continue;
+    let end = next;
+    for (let k = next; k < rows.length; k += 1) {
+      if (blank(k)) continue;
+      if (indentOf(rows[k].text) <= base) break;
+      end = k;
+    }
+    regions.push({ start: i, end });
+  }
+  return regions;
+}
+
+function defaultFolds(rows, regions, minHidden = 6) {
+  const folded = new Set();
+  const changedBefore = [0];
+  rows.forEach((row) => changedBefore.push(changedBefore[changedBefore.length - 1] + (row.kind === "ctx" ? 0 : 1)));
+  if (changedBefore[rows.length] === 0) return folded;
+  let coveredUntil = -1;
+  for (const region of regions) {
+    if (region.start <= coveredUntil || region.end - region.start < minHidden) continue;
+    if (changedBefore[region.end + 1] - changedBefore[region.start] > 0) continue;
+    folded.add(region.start);
+    coveredUntil = region.end;
+  }
+  return folded;
+}
+
+function hiddenRows(regions, folded) {
+  const hidden = new Set();
+  for (const region of regions) {
+    if (!folded.has(region.start)) continue;
+    for (let i = region.start + 1; i <= region.end; i += 1) hidden.add(i);
+  }
+  return hidden;
+}
+
 function pushEntry(stack, entry) {
   return stack.concat([entry]);
 }
@@ -315,7 +363,7 @@ function askTools(data) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STRINGS, t, parseMarkers, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
-    codeRows, lineSpans, lineSegments, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
+    codeRows, lineSpans, lineSegments, foldRegions, defaultFolds, hiddenRows, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
     CORE_SECTION, contextBlock, explainPrompt, askTurns, askTools,
   };
 }

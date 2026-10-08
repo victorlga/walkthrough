@@ -119,3 +119,34 @@ test("explanations generated on the page belong to one head commit", () => {
   const second = core.storageKey({ repo: "r", slug: "s", head: "bbb222" });
   assert.notStrictEqual(first, second);
 });
+
+const rowsOf = (lines, changed = []) => lines.map((text, i) => ({ n: i + 1, kind: changed.includes(i) ? "add" : "ctx", text }));
+
+test("blocks fold by indentation and keep their closing line visible", () => {
+  const rows = rowsOf(["function a() {", "  if (x) {", "    y();", "", "  }", "  return 1;", "}"]);
+  assert.deepStrictEqual(core.foldRegions(rows), [{ start: 0, end: 5 }, { start: 1, end: 2 }]);
+});
+
+test("Clojure forms fold by their indentation too", () => {
+  const rows = rowsOf(["(defn f [x]", "  (let [a 1]", "    (+ a x)))", "", "(def g 1)"]);
+  assert.deepStrictEqual(core.foldRegions(rows), [{ start: 0, end: 2 }, { start: 1, end: 2 }]);
+});
+
+test("long blocks without changes start folded so the change is in view", () => {
+  const lines = ["def f():", "    config = {"].concat(Array.from({ length: 8 }, (_, i) => `        "k${i}": ${i},`), ["    }", "    return compute(config)"]);
+  const rows = rowsOf(lines, [11]);
+  const regions = core.foldRegions(rows);
+  assert.deepStrictEqual([...core.defaultFolds(rows, regions)], [1]);
+  assert.deepStrictEqual([...core.hiddenRows(regions, new Set([1]))], [2, 3, 4, 5, 6, 7, 8, 9]);
+});
+
+test("a function without changes opens unfolded", () => {
+  const lines = ["def f():", "    config = {"].concat(Array.from({ length: 8 }, (_, i) => `        "k${i}": ${i},`), ["    }"]);
+  const rows = rowsOf(lines);
+  assert.strictEqual(core.defaultFolds(rows, core.foldRegions(rows)).size, 0);
+});
+
+test("short blocks and blocks with changes stay open", () => {
+  const rows = rowsOf(["def f():", "    if x:", "        y()", "    for i in z:", "        w(i)", "        v(i)"], [5]);
+  assert.strictEqual(core.defaultFolds(rows, core.foldRegions(rows)).size, 0);
+});
