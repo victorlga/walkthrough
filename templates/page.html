@@ -116,7 +116,9 @@ tr.hl, tr.add.hl, tr.del.hl { background: var(--hl); }
 .hljs-title, .hljs-name, .hljs-attr, .hljs-type, .hljs-params { color: var(--tok-name); }
 .ai { flex: 0 0 auto; display: grid; gap: .6rem; max-height: 45vh; overflow: auto; padding: .7rem .8rem;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
-.ai:empty { display: none; }
+.ai:empty, .explain-slot:empty { display: none; }
+.explain-slot { display: grid; gap: .5rem; padding: .7rem .8rem; background: var(--panel); border: 1px dashed var(--rule); border-radius: 6px; }
+.explain-slot p { margin: 0; color: var(--muted); }
 .ai label { font-size: .85rem; color: var(--muted); }
 .ai textarea { width: 100%; min-height: 4.5rem; padding: .5rem; font: inherit; color: var(--ink); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 4px; }
@@ -399,7 +401,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const nextId = nextInRoute(plan, entry.id);
     const next = nextId && nodes[nextId]
       ? `<button type="button" class="next" id="next" data-next="${escapeHtml(nextId)}">${tr("next")}: <span>${escapeHtml(nodes[nextId].name)}</span> →</button>` : "";
-    view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}${next}</article>`
+    view.innerHTML = `<div class="view"><article class="explain" id="explain">${explanationHtml(node, entryFor(entry.id), ctx)}<div class="explain-slot" id="explain-slot"></div>${next}</article>`
       + `<div class="side"><section class="code"><header>${from}${whereHtml(node.path, node.lines[0])}</header>`
       + codeTable(codeRows(node), lineSpans(node), languageOf(node.path))
       + `${footerHtml(node)}</section><div class="ai" id="ai"></div></div></div>`;
@@ -448,8 +450,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const entry = entryFor(id);
     if (entry && entry.level === "full") return;
     const prompt = tr("chatPrompt").replace("{id}", id);
-    const ai = document.getElementById("ai");
-    ai.innerHTML = `<p>${tr("askInChat")}</p><pre class="copybox" id="copy-text">${escapeHtml(prompt)}</pre>`
+    const slot = document.getElementById("explain-slot");
+    slot.innerHTML = `<p>${tr("askInChat")}</p><pre class="copybox" id="copy-text">${escapeHtml(prompt)}</pre>`
       + `<div class="row"><button type="button" class="secondary" id="copy">${tr("copy")}</button></div>`;
     document.getElementById("copy").addEventListener("click", (event) => copyText(event.currentTarget, prompt, document.getElementById("copy-text")));
   };
@@ -564,15 +566,19 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const entry = app.entryFor(id);
     const needsExplain = !entry || entry.level !== "full";
     const ai = document.getElementById("ai");
-    ai.innerHTML = '<div class="row">'
-      + (needsExplain ? `<button type="button" class="primary" id="explain-button">${app.tr("explain")}</button>` : "")
-      + `<button type="button" class="secondary" id="stop-button" hidden>${app.tr("stop")}</button>`
-      + '<span id="ai-status" class="progress" role="status"></span></div>'
-      + '<div id="thread"></div>'
+    const slot = document.getElementById("explain-slot");
+    if (needsExplain) {
+      slot.innerHTML = `<p>${app.tr("noExplanation")}</p><div class="row"><button type="button" class="primary" id="explain-button">${app.tr("explain")}</button>`
+        + `<button type="button" class="secondary" id="explain-stop" hidden>${app.tr("stop")}</button><span id="explain-status" class="progress" role="status"></span></div>`;
+    }
+    ai.innerHTML = '<div id="thread"></div>'
       + `<label for="question">${app.tr("ask")}</label><textarea id="question"></textarea>`
-      + `<div class="row"><button type="button" class="secondary" id="ask-button">${app.tr("send")}</button></div>`;
-    const controls = { explain: document.getElementById("explain-button"), stop: document.getElementById("stop-button"),
-      status: document.getElementById("ai-status"), send: document.getElementById("ask-button") };
+      + `<div class="row"><button type="button" class="secondary" id="ask-button">${app.tr("send")}</button>`
+      + `<button type="button" class="secondary" id="stop-button" hidden>${app.tr("stop")}</button><span id="ai-status" class="progress" role="status"></span></div>`;
+    const explainButton = document.getElementById("explain-button");
+    const send = document.getElementById("ask-button");
+    const controls = { explain: explainButton, stop: document.getElementById("stop-button"), status: document.getElementById("ai-status"), send };
+    const explainControls = { explain: explainButton, stop: document.getElementById("explain-stop"), status: document.getElementById("explain-status"), send };
     const ctx = { nameIndex: app.nameIndex, nodes: app.nodes, lineRange: app.nodes[id].lines,
       prefer: [neighborsOf(app.nodes[id]), new Set(app.data.index.changed || [])] };
     const thread = document.getElementById("thread");
@@ -583,11 +589,11 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       bubble.innerHTML = renderMarkdown(turn.content, ctx);
       thread.append(bubble);
     }
-    controls.stop.addEventListener("click", () => { if (running) running.abort(); });
+    for (const stop of [controls.stop, explainControls.stop]) if (stop) stop.addEventListener("click", () => { if (running) running.abort(); });
 
-    if (controls.explain) {
-      controls.explain.addEventListener("click", () => {
-        const signal = start(controls);
+    if (explainButton) {
+      explainButton.addEventListener("click", () => {
+        const signal = start(explainControls);
         const prompt = explainPrompt({ data: app.data, id, stack: app.stack });
         sample.json(prompt, { signal, modelTier: "default", cache: { gcTime: 86400000 } }).then((result) => {
           if (!result || typeof result.summary !== "string" || !result.sections || typeof result.sections !== "object") {
@@ -595,9 +601,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
           }
           app.generated[id] = { level: "full", summary: result.summary, sections: result.sections };
           app.store.set("generated", app.generated);
-          finish(controls);
+          finish(explainControls);
           if (app.top().id === id) app.render();
-        }).catch((error) => { finish(controls); handleFailure(error, controls.status); });
+        }).catch((error) => { finish(explainControls); handleFailure(error, explainControls.status); });
       });
     }
 
