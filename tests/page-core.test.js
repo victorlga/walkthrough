@@ -223,3 +223,8 @@ test("the review block tells the agent what to do and carries the review as JSON
   assert.deepStrictEqual(json, { walkthroughReview: 1, pr: 908, repoPath: "/repo", base: "b1", head: "h1", event: "APPROVE", body: "Bom.",
     comments: [{ path: "a.py", line: 3, body: "Ok." }] });
 });
+
+test("a one-line summary shows the function name, also when the marker holds a full id", () => {
+  assert.strictEqual(core.plainText("Chama [[b.py#handler]] e [[calc]] nas [[L12]].", nodes), "Chama handler e calc nas .");
+  assert.strictEqual(core.plainText("Usa [[missing.py#gone]].", nodes), "Usa missing.py#gone.");
+});

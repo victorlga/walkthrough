@@ -69,6 +69,14 @@ function parseMarkers(text) {
   return out;
 }
 
+function plainText(text, nodes) {
+  return parseMarkers(text).map((segment) => {
+    if (segment.type === "text") return segment.value;
+    if (segment.type === "ref") return (nodes || {})[segment.target]?.name || segment.target;
+    return "";
+  }).join("");
+}
+
 function buildNameIndex(nodes) {
   const index = new Map();
   for (const [id, node] of Object.entries(nodes || {})) {
@@ -438,7 +446,7 @@ function askTools(data) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    STRINGS, t, parseMarkers, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
+    STRINGS, t, parseMarkers, plainText, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
     codeRows, lineSpans, lineSegments, foldRegions, defaultFolds, hiddenRows, entryLines, groupByFile, splitPath, nextInRoute, emptyReview, commentAt, setComment, reviewBlock, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
     CORE_SECTION, contextBlock, explainPrompt, askTurns, askTools,
   };

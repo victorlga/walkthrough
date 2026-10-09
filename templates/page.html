@@ -197,7 +197,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   const app = { stack: [{ id: null }], pinned: null, render: null, generated, store, tr, nodes, explanations, nameIndex, data };
   window.walkthroughApp = app;
 
-  const plain = (text) => parseMarkers(text).map((s) => (s.type === "text" ? s.value : s.type === "ref" ? s.target : "")).join("");
+  const plain = (text) => plainText(text, nodes);
   const top = () => app.stack[app.stack.length - 1];
   const entryFor = (id) => {
     const written = explanations.nodes[id];
