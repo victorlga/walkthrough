@@ -333,7 +333,7 @@ class Indexer:
         status = "unchanged"
         if candidate.id in self.changed_set:
             whole = all(n in set(added) for n in range(candidate.start, candidate.end + 1))
-            status = "added" if whole else "modified"
+            status = "added" if whole and not removed else "modified"
         return {"status": status, "added": added, "removed": removed}
 
     def add_node(self, candidate: Candidate, depth: int, up: int, direction: str) -> bool:
@@ -495,16 +495,20 @@ class Indexer:
 
     def expand(self, changed: List[str]) -> None:
         queue = deque()
-        for node_id in changed:
+        leaves = set()
+        for node_id in sorted(changed, key=lambda i: self.known[i].kind not in EXPANDING_KINDS):
             if self.add_node(self.known[node_id], 0, 0, "seed"):
                 queue.append(node_id)
         while queue:
             node_id = queue.popleft()
             node = self.nodes[node_id]
             depth, up, direction = node["depth"], node["up"], node["direction"]
-            descends = up == 0 and not node["test"] and node["kind"] in EXPANDING_KINDS
+            descends = up == 0 and not node["test"] and node["kind"] in EXPANDING_KINDS and node_id not in leaves
+            one_level = direction == "seed" and not node["test"] and node["kind"] not in EXPANDING_KINDS
             for target in self.compute_links(node_id) + self.compute_implementations(node_id):
-                if descends and depth + 1 <= self.caps.max_down and self.add_node(target, depth + 1, up, "down"):
+                if (descends or one_level) and depth + 1 <= self.caps.max_down and self.add_node(target, depth + 1, up, "down"):
+                    if one_level:
+                        leaves.add(target.id)
                     queue.append(target.id)
             if direction in ("seed", "up") or depth <= 1:
                 for caller in self.compute_callers(node_id):

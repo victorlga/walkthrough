@@ -98,3 +98,58 @@ class ContextIndexTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+SCHEMA_BASE = """LIMIT = 10
+
+
+def deep():
+    return 2
+
+
+def helper():
+    return deep()
+
+
+RULES = {"limit": LIMIT}
+"""
+
+SCHEMA_HEAD = """LIMIT = 10
+
+
+def deep():
+    return 2
+
+
+def helper():
+    return deep()
+
+
+RULES = {"limit": LIMIT, "helper": helper}
+"""
+
+
+class ChangedConstantTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        repo = init_repo(Path(cls.tmp.name) / "repo")
+        (repo / "rules.py").write_text(SCHEMA_BASE)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-m", "base")
+        base = git(repo, "rev-parse", "HEAD").strip()
+        (repo / "rules.py").write_text(SCHEMA_HEAD)
+        cls.index = build_index(repo.resolve(), base, load_config())
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_a_changed_constant_opens_what_it_uses_one_level_deep(self):
+        self.assertEqual(self.index["changed"], ["rules.py#RULES"])
+        self.assertIn("rules.py#LIMIT", self.index["nodes"])
+        self.assertIn("rules.py#helper", self.index["nodes"])
+        self.assertNotIn("rules.py#deep", self.index["nodes"])
+
+    def test_an_edited_one_line_definition_is_modified_not_added(self):
+        self.assertEqual(self.index["nodes"]["rules.py#RULES"]["change"]["status"], "modified")
