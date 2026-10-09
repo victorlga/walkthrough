@@ -36,6 +36,13 @@ button { font: inherit; color: inherit; }
 .trail .sep { color: var(--muted); }
 .progress { font: .8rem var(--font-code); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 main { padding-inline: 16px; padding-block: 1.25rem 4rem; }
+main.fill { height: calc(100vh - var(--bar-h, 2.8rem)); overflow: hidden; padding-block: 1rem 0; }
+main.fill .view { height: 100%; }
+main.fill .explain, main.fill .side { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 2rem; }
+@media (max-width: 880px) {
+  main.fill { height: auto; overflow: visible; padding-block: 1.25rem 4rem; }
+  main.fill .view, main.fill .explain, main.fill .side { height: auto; overflow: visible; padding-bottom: 0; }
+}
 .overview { max-width: 46rem; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; }
 .overview h2, .explain h3 { margin: 0 0 .5rem; font-size: .75rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
 .overview h3.part { margin: 1rem 0 .25rem; font-size: 1rem; }
@@ -64,7 +71,7 @@ details.file .item { padding-left: 1.6rem; }
 .warn { margin: 0; font-size: .85rem; color: var(--del-ink); }
 .view { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 1.5rem; align-items: start; }
 @media (max-width: 880px) { .view { grid-template-columns: minmax(0, 1fr); } }
-.explain { display: grid; gap: 1.1rem; min-width: 0; }
+.explain { display: grid; gap: 1.1rem; min-width: 0; align-content: start; }
 .explain h1 { margin: 0; font: 600 1.35rem/1.3 var(--font-code); overflow-wrap: anywhere; text-wrap: balance; }
 .explain .lede { margin: 0; font-size: 1.05rem; }
 .explain p, .explain li { max-width: 65ch; }
@@ -84,13 +91,13 @@ details summary { cursor: pointer; color: var(--muted); }
 .explain details[open] > summary { margin-bottom: .5rem; }
 .explain section.risk { border-left: 3px solid var(--del-ink); padding-left: .75rem; }
 .side { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
-.code { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 0 1 auto;
+.code { display: flex; flex-direction: column; min-width: 0; flex: none;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
 .code > header, .code > footer { padding: .55rem .8rem; font-size: .85rem; color: var(--muted); }
 .code > header { border-bottom: 1px solid var(--rule); }
 .code > footer { border-top: 1px solid var(--rule); display: grid; gap: .45rem; }
 .code .where { font-family: var(--font-code); overflow-wrap: anywhere; }
-.code .scroll { overflow: auto; max-height: 75vh; position: relative; }
+.code .scroll { overflow-x: auto; position: relative; }
 .list { display: flex; flex-wrap: wrap; gap: .3rem .9rem; }
 .people > summary { color: var(--ink); font-weight: 600; }
 .people .count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
@@ -114,7 +121,7 @@ tr.hl, tr.add.hl, tr.del.hl { background: var(--hl); }
 .hljs-comment, .hljs-quote { color: var(--tok-comment); font-style: italic; }
 .hljs-number, .hljs-symbol { color: var(--tok-number); }
 .hljs-title, .hljs-name, .hljs-attr, .hljs-type, .hljs-params { color: var(--tok-name); }
-.ai { flex: 0 0 auto; display: grid; gap: .6rem; max-height: 45vh; overflow: auto; padding: .7rem .8rem;
+.ai { flex: none; display: grid; gap: .6rem; padding: .7rem .8rem;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
 .ai:empty, .explain-slot:empty { display: none; }
 .explain-slot { display: grid; gap: .5rem; padding: .7rem .8rem; background: var(--panel); border: 1px dashed var(--rule); border-radius: 6px; }
@@ -202,6 +209,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     }
     renderTrail();
     renderProgress();
+    view.classList.toggle("fill", Boolean(current.id));
+    document.documentElement.style.setProperty("--bar-h", `${document.querySelector(".bar").offsetHeight}px`);
     if (!current.id) renderOverview();
     else if (nodes[current.id]) renderNode(current);
     else if (hunks[current.id]) renderHunk(current);
@@ -365,10 +374,13 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 
   function showFirstChange() {
     applyFolds();
-    const scroll = view.querySelector(".code .scroll");
-    const first = scroll && scroll.querySelector("tr.add:not([hidden]), tr.del:not([hidden])");
-    if (first && first.offsetTop + first.offsetHeight > scroll.clientHeight) scroll.scrollTop = Math.max(0, first.offsetTop - scroll.clientHeight / 3);
+    const side = view.querySelector(".side");
+    const first = view.querySelector(".code tr.add:not([hidden]), .code tr.del:not([hidden])");
+    if (!side || !first || side.scrollHeight <= side.clientHeight) return;
+    const offset = first.getBoundingClientRect().top - side.getBoundingClientRect().top;
+    if (offset + first.offsetHeight > side.clientHeight) side.scrollTop = Math.max(0, offset - side.clientHeight / 3);
   }
+
 
   function peopleList(label, ids, open) {
     if (!ids.length) return "";
@@ -413,8 +425,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const hunk = hunks[entry.id];
     const summary = (entryFor(entry.id) || {}).summary || "";
     view.innerHTML = `<div class="view"><article class="explain"><h1>${escapeHtml(splitPath(hunk.path).file)}</h1><p class="lede">${escapeHtml(plain(summary))}</p></article>`
-      + `<section class="code"><header>${whereHtml(hunk.path, null)}</header>`
-      + `${codeTable(hunk.lines, null, languageOf(hunk.path))}</section></div>`;
+      + `<div class="side"><section class="code"><header>${whereHtml(hunk.path, null)}</header>`
+      + `${codeTable(hunk.lines, null, languageOf(hunk.path))}</section></div></div>`;
     showFirstChange();
   }
 
@@ -499,6 +511,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   view.addEventListener("mouseout", (event) => {
     const step = event.target.closest("li[data-lines]");
     if (step && !step.contains(event.relatedTarget)) highlightLines(app.pinned);
+  });
+  window.addEventListener("resize", () => {
+    document.documentElement.style.setProperty("--bar-h", `${document.querySelector(".bar").offsetHeight}px`);
   });
   document.addEventListener("keydown", (event) => {
     if (event.target.closest("input, textarea, [contenteditable]")) return;
