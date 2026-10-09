@@ -136,13 +136,33 @@ tr.hl, tr.add.hl, tr.del.hl { background: var(--hl); }
 .answer.question { background: var(--accent-soft); }
 .copybox { margin: 0; padding: .5rem; font: .8rem var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; user-select: all; }
+.review-panel { position: fixed; z-index: 3; right: 16px; top: calc(var(--bar-h, 2.8rem) + .5rem); width: min(26rem, calc(100vw - 32px));
+  max-height: calc(100vh - var(--bar-h, 2.8rem) - 1rem); overflow: auto; display: grid; gap: .6rem; padding: .8rem;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 6px 24px rgb(0 0 0 / .18); }
+.review-panel header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.review-panel textarea, tr.note-editor textarea { width: 100%; min-height: 4rem; padding: .5rem; font: inherit; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; }
+.verdicts { display: flex; flex-wrap: wrap; gap: .4rem .9rem; }
+.review-comments { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; font-size: .9rem; overflow-wrap: anywhere; }
+.hint { margin: 0; color: var(--muted); font-size: .85rem; }
+button.link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: .85rem; }
+#review-toggle { padding: .15rem .6rem; font-size: .85rem; white-space: nowrap; }
+td.n[data-comment-line] { cursor: pointer; }
+td.n[data-comment-line]:hover { color: var(--accent); text-decoration: underline; }
+table.src tr.note td, table.src tr.note-editor td { white-space: normal; padding: .45rem .55rem .55rem 3.4rem;
+  background: var(--accent-soft); font: .9rem/1.5 var(--font-body); }
+tr.note .note-body { max-width: 60ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+tr.note .row, tr.note-editor .row { display: flex; gap: .6rem; margin-top: .3rem; }
+tr.note-editor textarea { max-width: 60ch; display: block; }
 button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 <header class="bar">
   <nav id="trail" class="trail"></nav>
   <span id="progress" class="progress"></span>
+  <button id="review-toggle" type="button" class="secondary" hidden></button>
 </header>
+<aside id="review-panel" class="review-panel" hidden></aside>
 <main id="view"></main>
 <script id="walkthrough-data" type="application/json">__WALKTHROUGH_DATA__</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -162,6 +182,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   const changedSet = new Set(index.changed || []);
   const hunks = Object.fromEntries((index.hunks || []).map((hunk) => [hunk.id, hunk]));
   const prefix = storageKey(index.meta);
+  const prNumber = (index.meta && index.meta.pr) || null;
   const store = {
     get(key, fallback) {
       try { const value = localStorage.getItem(`${prefix}:${key}`); return value ? JSON.parse(value) : fallback; } catch (error) { return fallback; }
@@ -203,6 +224,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     const current = top();
     app.pinned = null;
     app.fold = null;
+    app.codePath = null;
     if (current.id && nodes[current.id]) {
       visited.add(current.id);
       store.set("visited", [...visited]);
@@ -344,7 +366,8 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
         : lineSegments(row.text, spans.get(row.n)).map((segment) => segmentHtml(segment, language, row.n)).join("");
       const fold = sizes.has(i) ? `<button type="button" class="fold" data-fold="${i}" aria-expanded="true" aria-label="${tr("fold")}"></button>` : "";
       const pill = sizes.has(i) ? `<button type="button" class="fold-pill" data-fold="${i}" hidden>⋯ ${sizes.get(i)} ${tr("lines")}</button>` : "";
-      return `<tr class="${row.kind}" data-i="${i}"${row.n ? ` data-n="${row.n}"` : ""}><td class="n">${row.n || ""}</td>`
+      const commentable = prNumber && row.n ? ` data-comment-line="${row.n}" title="${tr("commentLine")} ${row.n}"` : "";
+      return `<tr class="${row.kind}" data-i="${i}"${row.n ? ` data-n="${row.n}"` : ""}><td class="n"${commentable}>${row.n || ""}</td>`
         + `<td class="f">${fold}</td><td class="m">${marks[row.kind]}</td><td class="c">${content}${pill}</td></tr>`;
     }).join("");
   }
@@ -359,6 +382,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
     if (!app.fold) return;
     const hidden = hiddenRows(app.fold.regions, app.fold.folded);
     view.querySelectorAll("table.src tr[data-i]").forEach((row) => { row.hidden = hidden.has(Number(row.dataset.i)); });
+    view.querySelectorAll("table.src tr[data-note-for]").forEach((row) => { row.hidden = hidden.has(Number(row.dataset.noteFor)); });
     view.querySelectorAll("table.src [data-fold]").forEach((button) => {
       const closed = app.fold.folded.has(Number(button.dataset.fold));
       if (button.classList.contains("fold-pill")) button.hidden = !closed;
@@ -407,6 +431,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 
   function renderNode(entry) {
     const node = nodes[entry.id];
+    app.codePath = node.path;
     const ctx = { nameIndex, nodes, lineRange: node.lines, prefer: [neighborsOf(node), changedSet] };
     const from = entry.fromId && nodes[entry.fromId]
       ? `<div>${tr("cameFrom")} <a class="ref" href="#" data-back="1">${escapeHtml(nodes[entry.fromId].name)}</a>${entry.fromLine ? `, ${tr("line")} ${entry.fromLine}` : ""}</div>` : "";
@@ -418,16 +443,91 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       + codeTable(codeRows(node), lineSpans(node), languageOf(node.path))
       + `${footerHtml(node)}</section><div class="ai" id="ai"></div></div></div>`;
     app.setupAi(entry.id);
+    renderNotes();
     showFirstChange();
   }
 
   function renderHunk(entry) {
     const hunk = hunks[entry.id];
+    app.codePath = hunk.path;
     const summary = (entryFor(entry.id) || {}).summary || "";
     view.innerHTML = `<div class="view"><article class="explain"><h1>${escapeHtml(splitPath(hunk.path).file)}</h1><p class="lede">${escapeHtml(plain(summary))}</p></article>`
       + `<div class="side"><section class="code"><header>${whereHtml(hunk.path, null)}</header>`
       + `${codeTable(hunk.lines, null, languageOf(hunk.path))}</section></div></div>`;
+    renderNotes();
     showFirstChange();
+  }
+
+  app.review = store.get("review", emptyReview());
+
+  function saveReview() {
+    store.set("review", app.review);
+    const toggle = document.getElementById("review-toggle");
+    toggle.textContent = `${tr("review")} (${app.review.comments.length})`;
+    if (!document.getElementById("review-panel").hidden) renderReviewPanel();
+  }
+
+  function noteRow(className, line, row, inner) {
+    return `<tr class="${className}" data-line="${line}" data-note-for="${row.dataset.i}"><td colspan="4">${inner}</td></tr>`;
+  }
+
+  function renderNotes() {
+    view.querySelectorAll("tr.note, tr.note-editor").forEach((row) => row.remove());
+    if (!prNumber || !app.codePath) return;
+    for (const comment of app.review.comments.filter((c) => c.path === app.codePath)) {
+      const row = view.querySelector(`table.src tr[data-n="${comment.line}"]`);
+      if (!row) continue;
+      row.insertAdjacentHTML("afterend", noteRow("note", comment.line, row, `<div class="note-body">${escapeHtml(comment.body)}</div>`
+        + `<div class="row"><button type="button" class="link" data-note-action="edit">${tr("edit")}</button>`
+        + `<button type="button" class="link" data-note-action="remove">${tr("remove")}</button></div>`));
+    }
+    applyFolds();
+  }
+
+  function openEditor(line) {
+    renderNotes();
+    const row = view.querySelector(`table.src tr[data-n="${line}"]`);
+    if (!row) return;
+    const existing = commentAt(app.review, app.codePath, line);
+    const note = view.querySelector(`tr.note[data-line="${line}"]`);
+    if (note) note.remove();
+    row.insertAdjacentHTML("afterend", noteRow("note-editor", line, row,
+      `<textarea aria-label="${tr("commentLine")} ${line}">${escapeHtml(existing ? existing.body : "")}</textarea>`
+      + `<div class="row"><button type="button" class="primary" data-note-action="save">${tr("save")}</button>`
+      + `<button type="button" class="secondary" data-note-action="cancel">${tr("cancel")}</button></div>`));
+    row.nextElementSibling.querySelector("textarea").focus();
+  }
+
+  function noteAction(button) {
+    const row = button.closest("tr");
+    const line = Number(row.dataset.line);
+    const action = button.dataset.noteAction;
+    if (action === "edit") { openEditor(line); return; }
+    if (action === "save") app.review = setComment(app.review, app.codePath, line, row.querySelector("textarea").value);
+    if (action === "remove") app.review = setComment(app.review, app.codePath, line, "");
+    saveReview();
+    renderNotes();
+  }
+
+  function renderReviewPanel() {
+    const panel = document.getElementById("review-panel");
+    const review = app.review;
+    const option = (value, label) => `<label><input type="radio" name="verdict" value="${value}"${review.event === value ? " checked" : ""}> ${label}</label>`;
+    const items = review.comments.map((c, position) => `<li><code>${escapeHtml(splitPath(c.path).file)}:${c.line}</code> ${escapeHtml(c.body)} `
+      + `<button type="button" class="link" data-remove-comment="${position}">${tr("remove")}</button></li>`).join("");
+    panel.innerHTML = `<header><strong>${tr("review")} · PR #${escapeHtml(prNumber)}</strong><button type="button" class="link" id="review-close">${tr("close")}</button></header>`
+      + `<div class="verdicts" role="radiogroup">${option("APPROVE", tr("approve"))}${option("REQUEST_CHANGES", tr("requestChanges"))}${option("COMMENT", tr("commentOnly"))}</div>`
+      + `<label for="review-body">${tr("generalComment")}</label><textarea id="review-body">${escapeHtml(review.body)}</textarea>`
+      + (items ? `<ul class="review-comments">${items}</ul>` : `<p class="hint">${tr("noComments")}</p>`)
+      + `<p class="hint">${tr("reviewHint").replace("{pr}", escapeHtml(prNumber))}</p>`
+      + `<div class="row"><button type="button" class="primary" id="review-copy">${tr("copyForAgent")}</button></div>`
+      + `<pre class="copybox" id="review-text" hidden></pre>`;
+  }
+
+  if (prNumber) {
+    const toggle = document.getElementById("review-toggle");
+    toggle.hidden = false;
+    toggle.textContent = `${tr("review")} (${app.review.comments.length})`;
   }
 
   function highlightLines(spec) {
@@ -469,6 +569,31 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   };
 
   document.addEventListener("click", (event) => {
+    if (prNumber) {
+      const panel = document.getElementById("review-panel");
+      if (event.target.closest("#review-toggle")) { panel.hidden = !panel.hidden; if (!panel.hidden) renderReviewPanel(); return; }
+      if (event.target.closest("#review-close")) { panel.hidden = true; return; }
+      const removeTarget = event.target.closest("[data-remove-comment]");
+      if (removeTarget) {
+        const comment = app.review.comments[Number(removeTarget.dataset.removeComment)];
+        app.review = setComment(app.review, comment.path, comment.line, "");
+        saveReview();
+        renderNotes();
+        return;
+      }
+      if (event.target.closest("#review-copy")) {
+        const text = reviewBlock(index.meta, app.review, lang);
+        const pre = document.getElementById("review-text");
+        pre.textContent = text;
+        pre.hidden = false;
+        copyText(event.target.closest("#review-copy"), text, pre);
+        return;
+      }
+      const lineTarget = event.target.closest("[data-comment-line]");
+      if (lineTarget) { openEditor(Number(lineTarget.dataset.commentLine)); return; }
+      const noteTarget = event.target.closest("[data-note-action]");
+      if (noteTarget) { noteAction(noteTarget); return; }
+    }
     const jumpTarget = event.target.closest("[data-jump]");
     if (jumpTarget) { jump(Number(jumpTarget.dataset.jump)); return; }
     const nextTarget = event.target.closest("[data-next]");
@@ -498,6 +623,12 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (first) first.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
     }
+  });
+  document.addEventListener("change", (event) => {
+    if (event.target.name === "verdict") { app.review = { ...app.review, event: event.target.value }; saveReview(); }
+  });
+  document.addEventListener("input", (event) => {
+    if (event.target.id === "review-body") { app.review = { ...app.review, body: event.target.value }; store.set("review", app.review); }
   });
   view.addEventListener("toggle", (event) => {
     const key = event.target.dataset && event.target.dataset.section;

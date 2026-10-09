@@ -202,3 +202,24 @@ test("an entry point names the roteiro functions it reaches before constants", (
   };
   assert.deepStrictEqual(core.entryLines(index, ["b.ts#zeta"])[0].reached, ["b.ts#zeta", "b.ts#helper", "b.ts#ALPHA"]);
 });
+
+test("one comment per line: saving replaces, an empty text removes", () => {
+  let review = core.emptyReview();
+  review = core.setComment(review, "a.py", 12, "Por quê?");
+  review = core.setComment(review, "a.py", 12, "Por que não 3?");
+  review = core.setComment(review, "b.py", 4, "Ok.");
+  assert.deepStrictEqual(review.comments, [{ path: "a.py", line: 12, body: "Por que não 3?" }, { path: "b.py", line: 4, body: "Ok." }]);
+  review = core.setComment(review, "a.py", 12, "  ");
+  assert.deepStrictEqual(review.comments.map((c) => c.path), ["b.py"]);
+  assert.strictEqual(core.commentAt(review, "b.py", 4).body, "Ok.");
+});
+
+test("the review block tells the agent what to do and carries the review as JSON", () => {
+  const meta = { pr: 908, repoPath: "/repo", base: "b1", head: "h1" };
+  const review = { event: "APPROVE", body: "Bom.", comments: [{ path: "a.py", line: 3, body: "Ok." }] };
+  const block = core.reviewBlock(meta, review, "pt");
+  assert.ok(block.startsWith("Poste esta review do walkthrough no PR #908"));
+  const json = JSON.parse(block.slice(block.indexOf("{"), block.lastIndexOf("}") + 1));
+  assert.deepStrictEqual(json, { walkthroughReview: 1, pr: 908, repoPath: "/repo", base: "b1", head: "h1", event: "APPROVE", body: "Bom.",
+    comments: [{ path: "a.py", line: 3, body: "Ok." }] });
+});

@@ -17,6 +17,11 @@ const STRINGS = {
     trimmed: "Funções cortadas por tamanho", outside: "fora do índice", library: "biblioteca", noCallers: "Ninguém chama esta função no repo.",
     notComputed: "Quem chama não foi calculado nesta profundidade.", hunk: "Trecho", noChanges: "Nenhuma função mudou.",
     chatPrompt: "explica {id} no walkthrough", fold: "Recolher ou abrir o bloco", lines: "linhas", next: "Próximo", more: "mais",
+    reviewPrompt: "Poste esta review do walkthrough no PR #{pr} com `walkthrough review`:", review: "Review",
+    approve: "Aprovar", requestChanges: "Pedir mudanças", commentOnly: "Só comentar", generalComment: "Comentário geral",
+    copyForAgent: "Copiar para o agente", reviewHint: "Cole no chat do seu agente. Ele posta tudo como uma review no PR #{pr}.",
+    noComments: "Nenhum comentário em linha. Clique no número de uma linha para comentar.", save: "Salvar", cancel: "Cancelar",
+    remove: "Remover", edit: "Editar", commentLine: "Comentar a linha", close: "Fechar",
   },
   en: {
     overview: "Overview", roteiro: "route", of: "of", story: "The story",
@@ -31,6 +36,11 @@ const STRINGS = {
     trimmed: "Functions cut for size", outside: "outside the index", library: "library", noCallers: "Nothing in the repo calls this function.",
     notComputed: "Callers were not computed at this depth.", hunk: "Hunk", noChanges: "No function changed.",
     chatPrompt: "explain {id} in the walkthrough", fold: "Fold or unfold the block", lines: "lines", next: "Next", more: "more",
+    reviewPrompt: "Post this walkthrough review to PR #{pr} with `walkthrough review`:", review: "Review",
+    approve: "Approve", requestChanges: "Request changes", commentOnly: "Comment only", generalComment: "General comment",
+    copyForAgent: "Copy for the agent", reviewHint: "Paste it into your agent's chat. It posts everything as one review on PR #{pr}.",
+    noComments: "No line comments yet. Click a line number to comment.", save: "Save", cancel: "Cancel",
+    remove: "Remove", edit: "Edit", commentLine: "Comment on the line", close: "Close",
   },
 };
 
@@ -282,6 +292,28 @@ function nextInRoute(plan, id) {
   return position >= 0 && position + 1 < route.length ? route[position + 1] : null;
 }
 
+function emptyReview() {
+  return { event: "COMMENT", body: "", comments: [] };
+}
+
+function commentAt(review, path, line) {
+  return review.comments.find((c) => c.path === path && c.line === line) || null;
+}
+
+function setComment(review, path, line, body) {
+  const others = review.comments.filter((c) => !(c.path === path && c.line === line));
+  const text = String(body || "").trim();
+  const comments = text ? review.comments.map((c) => (c.path === path && c.line === line ? { path, line, body: text } : c)) : others;
+  if (text && !commentAt(review, path, line)) comments.push({ path, line, body: text });
+  return { ...review, comments };
+}
+
+function reviewBlock(meta, review, lang) {
+  const payload = { walkthroughReview: 1, pr: meta.pr, repoPath: meta.repoPath, base: meta.base, head: meta.head,
+    event: review.event, body: review.body, comments: review.comments };
+  return `${t(lang, "reviewPrompt").replace("{pr}", meta.pr)}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+}
+
 function pushEntry(stack, entry) {
   return stack.concat([entry]);
 }
@@ -407,7 +439,7 @@ function askTools(data) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STRINGS, t, parseMarkers, buildNameIndex, resolveRef, escapeHtml, renderInline, renderMarkdown,
-    codeRows, lineSpans, lineSegments, foldRegions, defaultFolds, hiddenRows, entryLines, groupByFile, splitPath, nextInRoute, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
+    codeRows, lineSpans, lineSegments, foldRegions, defaultFolds, hiddenRows, entryLines, groupByFile, splitPath, nextInRoute, emptyReview, commentAt, setComment, reviewBlock, pushEntry, popTo, popOne, progress, numberedSource, storageKey, neighborsOf,
     CORE_SECTION, contextBlock, explainPrompt, askTurns, askTools,
   };
 }

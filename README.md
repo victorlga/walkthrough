@@ -10,6 +10,7 @@ It follows the `SKILL.md` format, so any coding agent that reads skills can run 
 - For each function, what it does and how the change alters it. Steps, the reason and the risks stay folded until you open them.
 - The code with the diff inline, folding like an editor, opened at the first change.
 - Callers, callees and tests one click away.
+- On a PR, line comments and a verdict that your agent posts as one GitHub review.
 - When the page is published to a host with an in-page model, an Explain button and a question box under each function.
 
 Large PRs are dosed. At most 12 functions get a full explanation, and every other change gets one line.
@@ -46,8 +47,9 @@ On the page, `n` goes to the next step of the route, Backspace or Ctrl-O goes ba
 2. The agent picks the route and writes the explanations, in parallel when it can run subagents.
 3. `validate` checks every reference against the index, along with the word limits.
 4. `render` builds one HTML file that opens in any browser.
+5. On a PR, the Review panel copies your comments and verdict as a block. Paste it into the agent, and `scripts/walkthrough review` posts it with the GitHub CLI.
 
-The skill only reads your repo. A PR or another branch is checked out in a temporary worktree under `~/.cache/walkthrough`, removed at the end.
+The skill only reads your repo, and posts nothing except a review you paste back. A PR or another branch is checked out in a temporary worktree under `~/.cache/walkthrough`, removed at the end.
 
 ## Tests
 

@@ -65,7 +65,7 @@ Open the file in the user's browser: `open` on macOS, `xdg-open` on Linux, `star
 
 If you can publish HTML pages to a host that gives pages an in-page model through a `sample` capability, render with `--mode artifact` instead and publish the file with that capability declared. The page then adds an Explain button and a question box under each function. It works without them everywhere else.
 
-Report the link, the counts and every warning `render` printed: lost links, pruned explanations, cut functions. Tell the user the keys once: `n` goes to the next step of the roteiro, Backspace or Ctrl-O goes back, `e` asks for an explanation.
+Report the link, the counts and every warning `render` printed: lost links, pruned explanations, cut functions. Tell the user the keys once: `n` goes to the next step of the roteiro, Backspace or Ctrl-O goes back, `e` asks for an explanation. On a PR, mention the Review button: a click on a line number comments that line.
 
 ## 8. Clean up
 
@@ -75,10 +75,21 @@ Run `W cleanup RUN_DIR` at the end, also after a failure. It removes the tempora
 
 When the user asks to explain a function or a part, write `full` explanations for those ids as in step 5, then merge, validate and render to the same path.
 
+## 10. Post a review
+
+On a PR the page has a Review panel. The user comments on lines, picks a verdict and copies a block that asks you to post it and holds a JSON with `"walkthroughReview": 1`. When the user pastes that block, save the JSON to a temporary file and run:
+
+```bash
+W review FILE --dry-run
+W review FILE
+```
+
+The dry run prints what goes to GitHub. Comments on lines GitHub cannot anchor move into the review body with their file and line. Then post, and report the link it prints. If `gh` refuses, for example an approval of your own PR, report the error as it came.
+
 ## Rules that are easy to break
 
 - Links come only from the index. Explanations may cite only functions the index has, and the validator rejects the rest. Never hand-edit a link into the page.
 - Never invent the reason for a change. "The reason is not recorded" is a correct answer.
 - The page calls a model only when the viewer clicks. Never add timers or automatic calls to the template.
-- Never commit, push or comment anywhere. This skill only reads the repo and writes to RUN_DIR.
+- Never commit, push or comment on your own. The only thing this skill posts is a review the user built on the page and pasted back.
 - Code is the source of truth over any glossary. Report divergences, do not smooth them over.

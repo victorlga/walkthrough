@@ -14,6 +14,7 @@ from walkthrough import gitops
 from walkthrough.config import load_config
 from walkthrough.indexer import Caps, build_index
 from walkthrough.render import render
+from walkthrough.review import ReviewError, anchorable_lines, build_review, load_review, post
 from walkthrough.validate import prune, validate
 
 GLOSSARY_NAMES = ("CONTEXT.md", "GLOSSARY.md")
@@ -310,6 +311,21 @@ def cmd_render(args) -> int:
     return 0
 
 
+def cmd_review(args) -> int:
+    try:
+        review = load_review(Path(args.file))
+        payload = build_review(review, anchorable_lines(review))
+        if args.dry_run:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        url = post(review, payload)
+    except (ReviewError, gitops.GitError, KeyError, json.JSONDecodeError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"posted {payload['event']} with {len(payload['comments'])} inline comments: {url}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="walkthrough")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -362,6 +378,11 @@ def build_parser() -> argparse.ArgumentParser:
     render_cmd.add_argument("--mode", choices=["local", "artifact"], default="local")
     render_cmd.add_argument("--lang", default="pt")
     render_cmd.set_defaults(func=cmd_render)
+
+    review_cmd = sub.add_parser("review", help="post a review block copied from the page to its PR")
+    review_cmd.add_argument("file")
+    review_cmd.add_argument("--dry-run", action="store_true")
+    review_cmd.set_defaults(func=cmd_review)
     return parser
 
 
